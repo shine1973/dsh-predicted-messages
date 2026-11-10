@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 — 2026-11-10
+
+- Declare Cordis as an optional host-provided peer instead of a production dependency, avoiding a private framework copy and the shared-package dependency warning.
+- Keep Cordis only as a development dependency for standalone development checks.
+- Verify DSH activation after removing the plugin-local Cordis package; add a regression guard for the dependency declaration.
+
 ## 0.1.3 — 2026-11-10
 
 - Avoid model requests when opening, restoring, or revisiting completed historical conversations. Automatic predictions require a running reply observed in the currently open conversation followed by a newer completed revision; existing cached suggestions remain reusable.

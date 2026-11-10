@@ -1,6 +1,6 @@
 # DSH 预测消息
 
-[English](README.en.md) · [下载最新版本](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.3) · [反馈问题](https://github.com/shine1973/dsh-predicted-messages/issues)
+[English](README.en.md) · [下载最新版本](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.4) · [反馈问题](https://github.com/shine1973/dsh-predicted-messages/issues)
 
 一个 DeepSeek Harness（DSH）插件：根据当前对话预测你接下来可能发送的消息，点击建议即可填入可编辑草稿。
 
@@ -24,7 +24,7 @@
 打开 DSH 侧栏 **插件 → 添加插件**，粘贴以下地址并安装：
 
 ```text
-https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.3/dsh-predicted-messages-0.1.3.tgz
+https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.4/dsh-predicted-messages-0.1.4.tgz
 ```
 
 也可以下载 Release 中的 `.tgz` 文件，让 DSH 从该文件的绝对路径安装。安装时需要联网下载运行依赖，安装包不含 `node_modules`，也不包含安装脚本。
@@ -34,12 +34,12 @@ https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.3/dsh
 已安装 Git 时，可在“添加插件”中填写固定版本：
 
 ```text
-git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.3
+git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.4
 ```
 
 或者直接对 DSH 说：
 
-> 请安装这个插件：git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.3
+> 请安装这个插件：git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.4
 
 首发通过 GitHub 分发，不要求 npm 账号。Agent 可以通过 `plugin_manager` 的 `install_bundle` 操作安装上述地址。若 DSH 报告需要重启，按其提示重启。
 
@@ -96,6 +96,8 @@ Agent 工具 `predicted_messages` 与命令 `/predicted-messages` 支持以下�
 ## 本地开发
 
 要求 Node.js 22 或更新版本。
+
+Cordis 是 DSH 提供的可选共享依赖（peer dependency），不作为插件的生产依赖安装。`npm ci` 会为本地开发安装 Cordis 开发依赖；正式插件由 DSH 的宿主解析器提供 Cordis。不要把它重新加入 `dependencies`，也不要将开发依赖打进发布包。
 
 ```sh
 git clone https://github.com/shine1973/dsh-predicted-messages.git

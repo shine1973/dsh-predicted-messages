@@ -1,3 +1,4 @@
+// Cordis is provided by the DSH host through peer-aware runtime resolution.
 import { Service } from '@deepseek-ai/cordis';
 import schema from '@deepseek-ai/schemastery';
 import { z } from 'zod';

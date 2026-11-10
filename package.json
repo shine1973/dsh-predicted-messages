@@ -1,6 +1,6 @@
 {
   "name": "dsh-predicted-messages",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "description": "Predict your next message in DeepSeek Harness and adopt it as an editable draft. 根据对话预测下一条消息，点击填入草稿。",
   "license": "MIT",
@@ -22,10 +22,12 @@
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
-    "@deepseek-ai/cordis": "4.1.0",
     "@deepseek-ai/schemastery": "3.19.0",
     "zod": "4.4.3"
   },
+  "peerDependencies": { "@deepseek-ai/cordis": "~4.1.0" },
+  "peerDependenciesMeta": { "@deepseek-ai/cordis": { "optional": true } },
+  "devDependencies": { "@deepseek-ai/cordis": "4.1.0" },
   "dsh": {
     "bundle": { "patch": "./cordis.patch.yml" },
     "client": { "platform": "web", "immediately": true, "inject": ["@deepseek-ai/dsh-client-ui-conversation", "@deepseek-ai/dsh-client-locale", "@deepseek-ai/dsh-client-ui-session"] }
