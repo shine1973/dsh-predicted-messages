@@ -4,7 +4,17 @@
 
 Display optional next-message drafts submitted by the conversation model above the DeepSeek Harness composer. Selecting one fills an editable draft and never sends it.
 
-> These changes are available on `main`, but no new Release archive has been published. The package version remains 0.1.6; the published v0.1.6 still makes separate prediction requests and does not contain model-submitted suggestions or the manual button. See the [changelog](CHANGELOG.md).
+> v0.1.7 includes model-submitted suggestions and the manual request button. The older v0.1.6 uses separate prediction requests. See the [changelog](CHANGELOG.md).
+
+## Install v0.1.7 (recommended)
+
+In DSH **Plugins → Add plugin**, paste:
+
+```text
+https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.7/dsh-predicted-messages-0.1.7.tgz
+```
+
+Alternatively use the fixed Git tag `git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.7`. Installation downloads runtime dependencies; the archive contains no `node_modules` or install scripts.
 
 ## Install the main branch
 

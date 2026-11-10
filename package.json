@@ -1,6 +1,6 @@
 {
   "name": "dsh-predicted-messages",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "type": "module",
   "description": "Predict your next message in DeepSeek Harness and adopt it as an editable draft. 根据对话预测下一条消息，点击填入草稿。",
   "license": "MIT",

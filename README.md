@@ -4,7 +4,17 @@
 
 在 DeepSeek Harness 输入框上方显示主模型提交的下一步消息草稿。点击只填入编辑器，由你编辑和发送。
 
-> 下述功能已更新到 `main`，尚未发布新版 Release 安装包；包版本暂保留 0.1.6。已发布的 v0.1.6 仍采用独立预测请求，不包含主模型建议和手动按钮。更新详情见 [更新记录](CHANGELOG.md)。
+> v0.1.7 已包含主模型建议和手动生成按钮。旧版 v0.1.6 仍采用独立预测请求。更新详情见 [更新记录](CHANGELOG.md)。
+
+## 安装 v0.1.7（推荐）
+
+在 DSH「插件 → 添加插件」中粘贴：
+
+```text
+https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.7/dsh-predicted-messages-0.1.7.tgz
+```
+
+也可使用固定 Git 标签 `git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.7`。安装时需联网获取运行依赖；包内不包含 `node_modules`，没有安装脚本。
 
 ## 安装 main 分支版本
 
