@@ -1,6 +1,6 @@
 # DSH 预测消息
 
-[English](README.en.md) · [下载最新版本](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.5) · [反馈问题](https://github.com/shine1973/dsh-predicted-messages/issues)
+[English](README.en.md) · [下载最新版本](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.6) · [反馈问题](https://github.com/shine1973/dsh-predicted-messages/issues)
 
 一个 DeepSeek Harness（DSH）插件：根据当前对话预测你接下来可能发送的消息，点击建议即可填入可编辑草稿。
 
@@ -24,7 +24,7 @@
 打开 DSH 侧栏 **插件 → 添加插件**，粘贴以下地址并安装：
 
 ```text
-https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.5/dsh-predicted-messages-0.1.5.tgz
+https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.6/dsh-predicted-messages-0.1.6.tgz
 ```
 
 也可以下载 Release 中的 `.tgz` 文件，让 DSH 从该文件的绝对路径安装。安装时需要联网下载运行依赖，安装包不含 `node_modules`，也不包含安装脚本。
@@ -34,12 +34,12 @@ https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.5/dsh
 已安装 Git 时，可在“添加插件”中填写固定版本：
 
 ```text
-git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.5
+git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.6
 ```
 
 或者直接对 DSH 说：
 
-> 请安装这个插件：git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.5
+> 请安装这个插件：git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.6
 
 首发通过 GitHub 分发，不要求 npm 账号。Agent 可以通过 `plugin_manager` 的 `install_bundle` 操作安装上述地址。若 DSH 报告需要重启，按其提示重启。
 
@@ -59,9 +59,13 @@ git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.5
 
 每次预测会额外请求一次已有模型，消耗相应的模型配额。插件选择该模型支持的最低推理档位，默认 30 秒超时；同一轮缓存结果，避免重复请求。手动刷新有两秒冷却。
 
-预测上下文只包含实际用户文字和每轮最后保留的助手文字，最多 10 条，每条最多 6,000 字符，总预算默认 12,000 字符。不传思考内容、工具结果、图片或完整系统提示。文字会通过 DSH 现有模型路由发送给你配置的提供方；本插件不新增第三方分析服务，不读取或保存 API Key。
+最近对话包含实际用户文字和每轮最后保留的助手文字，最多 10 条，每条最多 6,000 字符，最近文字预算默认 12,000 个 UTF-16 单元。最近对话不包含思考内容、工具结果、图片或完整系统提示。已有摘要可能概括更早的历史内容。文字会通过 DSH 现有模型路由发送给你配置的提供方；本插件不新增第三方分析服务，不读取或保存 API Key。
 
 建议是模型生成的草稿，可能不符合你的意图；采用后仍可以编辑，不会自动授权或执行建议内容。
+
+已有 billion-context 摘要通过本机只读 detail API 按精确会话 ID 获取，无 latest 回退，不新增总结模型调用。摘要为历史数据，最新对话优先。仅筛选活跃块、排除其嵌套重复，按创建时间倒序截取，不执行相关性检索。接口已验证 billion-context 0.1.213，属于内部 Web API；结构变化、不可用、超过 2 MiB 或 1.5 秒超时均回退最近对话。地址从 XDG_STATE_HOME（默认 ~/.local/state）下 billion-context/proxy-origin 自动发现，也支持显式本机 HTTP origin。
+
+预算按 JavaScript UTF-16 长度计算，不是 token：最近文字优先，摘要独立最多 4,000，总 JSON 用户输入最多 16,000，包含 JSON 转义和字段开销；不包含固定系统提示和协议封装。转义开销较大时最近文字也会裁剪。summaryChars=0 禁止摘要读取。仅真正预测且缓存未命中时读取，打开历史或 status 不读取摘要。
 
 ## 配置
 
@@ -72,7 +76,10 @@ git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.5
 | `enabled` | `true` | 自动预测开关 |
 | `provider` | 空 | 预测模型提供方；空则跟随会话 |
 | `model` | 空 | 预测模型；必须与 `provider` 同时填写 |
-| `contextChars` | `12000` | 总字符预算，范围 1,000–20,000 |
+| `contextChars` | `12000` | 最近文字上限，范围 1,000–20,000 |
+| `summaryChars` | `4000` | 摘要独立上限，0–20,000；0 禁用 |
+| `totalChars` | `16000` | 序列化用户输入上限，1,000–40,000，必须不小于各独立预算 |
+| `summaryOrigin` | 空 | 自动发现；仅支持 loopback HTTP origin |
 | `timeoutMs` | `30000` | 请求超时毫秒数，范围 5,000–60,000 |
 
 插件包名为 `dsh-predicted-messages`。配置行 ID 保留为 `local-predicted-messages`，便于沿用开发版配置；插件不直接改写 profile 文件。

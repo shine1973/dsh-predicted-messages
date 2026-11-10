@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.6 — 2026-11-10
+
+- Reuse exact-session active billion-context summaries through bounded read-only loopback GET; no additional summarization model calls.
+- Preserve recent-text priority, configurable independent summary and serialized input budgets; discard stale context before model dispatch.
+- Fail back to recent conversation on unavailable/incompatible API; guard identity, hierarchy, cancellation, size and timeout.
+
+
 ## 0.1.5 — 2026-11-10
 
 - Upgrade Zod from 4.4.3 to 4.6.7, outside the affected range of GHSA-mrhx-c7xc-m3w5.

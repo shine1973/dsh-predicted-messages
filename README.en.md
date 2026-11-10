@@ -1,6 +1,6 @@
 # DSH predicted messages
 
-[简体中文](README.md) · [Download](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.5) · [Issues](https://github.com/shine1973/dsh-predicted-messages/issues)
+[简体中文](README.md) · [Download](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.6) · [Issues](https://github.com/shine1973/dsh-predicted-messages/issues)
 
 A community plugin for DeepSeek Harness (DSH) that predicts your next message from the conversation. Suggestions appear above the composer; selecting one fills an editable draft and never sends it automatically.
 
@@ -24,13 +24,13 @@ Requires DSH with a working model provider. Developed and used with **DSH 0.2.2-
 In **Plugins → Add plugin**, paste the release archive URL:
 
 ```text
-https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.5/dsh-predicted-messages-0.1.5.tgz
+https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.6/dsh-predicted-messages-0.1.6.tgz
 ```
 
 Alternatively, with Git installed:
 
 ```text
-git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.5
+git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.6
 ```
 
 You can also ask the DSH agent to install either address through `plugin_manager` with `action: install_bundle`. Follow any restart instruction returned by DSH. Runtime dependencies are downloaded during installation; the archive contains no `node_modules` or install scripts. This release is distributed through GitHub and does not require an npm account.
@@ -47,9 +47,13 @@ No automatic prediction starts while the assistant is replying or the composer c
 
 A prediction makes an additional request through your configured DSH provider and consumes model quota. It uses the model's lowest advertised reasoning effort, a 30-second default timeout, per-round caching, and a two-second manual refresh cooldown.
 
-The context contains actual user text and the last retained assistant text per turn: at most ten messages, each capped at 6,000 characters, within a default 12,000-character total budget. Reasoning text, tool results, images, and the full system prompt are excluded. Selected text goes to your configured model provider through DSH. The plugin adds no analytics service and does not read or store API keys.
+Recent context contains actual user text and the last retained assistant text per turn: at most ten messages, each capped at 6,000 characters, within a default 12,000 UTF-16-unit recent-text budget. Reasoning text, tool results, images, and the full system prompt are excluded. Selected text goes to your configured model provider through DSH. The plugin adds no analytics service and does not read or store API keys.
 
 Predictions are editable suggestions and may be wrong. They do not authorize or execute actions.
+
+Existing billion-context summaries are read using exact-session loopback HTTP GET detail (tested 0.1.213 internal Web API), without extra summarization calls or latest-session fallback. Active nested blocks are deduplicated, newest first; this is not relevance search. Summary claims are historical and yield to recent conversation. Shape errors, unavailable service, 2 MiB response limit or 1.5-second timeout fall back to recent-only input. Origin discovery reads billion-context/proxy-origin under XDG_STATE_HOME (default ~/.local/state); an explicit loopback HTTP origin is supported.
+
+Budgets count UTF-16 units, not tokens: recent text 12,000, summaries 4,000, actual serialized user JSON 16,000 including escaping/keys. Fixed system prompt and transport envelope are excluded. Recent text has priority but may itself be trimmed for escaping overhead. Zero summaryChars disables reads. History opening, status and cache hits do not fetch summaries.
 
 ## Configuration
 
@@ -60,7 +64,10 @@ The preference applies to all conversations in the current DSH profile and is sa
 | `enabled` | `true` | Automatic predictions |
 | `provider` | empty | Override provider; otherwise follow the session |
 | `model` | empty | Override model; must accompany `provider` |
-| `contextChars` | `12000` | Total character budget, 1,000–20,000 |
+| `contextChars` | `12000` | Recent text limit, 1,000–20,000 |
+| `summaryChars` | `4000` | Summary limit, 0–20,000; zero disables reads |
+| `totalChars` | `16000` | Serialized user input limit, 1,000–40,000; at least each individual budget |
+| `summaryOrigin` | empty | Auto-discover; loopback HTTP origin only |
 | `timeoutMs` | `30000` | Timeout in milliseconds, 5,000–60,000 |
 
 The public package is `dsh-predicted-messages`. Its configuration row retains the ID `local-predicted-messages` for development-version continuity. The plugin does not rewrite profile files directly.

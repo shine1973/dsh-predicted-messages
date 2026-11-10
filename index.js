@@ -2,6 +2,7 @@
 import { Service } from '@deepseek-ai/cordis';
 import schema from '@deepseek-ai/schemastery';
 import { z } from 'zod';
+import { readSummaries, localOrigin } from './summaries.js';
 import { PredictionRuntime, PROJECTION_KEY, initialState, foldContext } from './core.js';
 
 const viewSchema = z.object({ revision: z.number(), ready: z.boolean() });
@@ -18,11 +19,16 @@ export default class PredictedMessages extends Service {
     provider: schema.string().default('').description('Optional provider override; requires model. Empty follows the conversation.'),
     model: schema.string().default('').description('Optional model override; requires provider.'),
     contextChars: schema.number().step(1).min(1000).max(20000).default(12000),
+    summaryChars: schema.number().step(1).min(0).max(20000).default(4000).description('Historical summary UTF-16 budget; zero disables summary reads.'),
+    totalChars: schema.number().step(1).min(1000).max(40000).default(16000).description('Serialized prediction input UTF-16 limit, including JSON overhead.'),
+    summaryOrigin: schema.string().default('').description('Loopback HTTP origin; empty discovers billion-context proxy-origin.'),
     timeoutMs: schema.number().step(1).min(5000).max(60000).default(30000),
   });
   constructor(ctx, config) {
     super(ctx, 'predictedMessages');
     this.config = config;
+    if (config.totalChars < config.contextChars || config.totalChars < config.summaryChars) throw new Error('totalChars must cover each individual budget.');
+    if (config.summaryOrigin) localOrigin(config.summaryOrigin);
     if (Boolean(config.provider) !== Boolean(config.model)) throw new Error('预测模型的 provider 与 model 必须同时填写。');
   }
   async [Service.init]() {
@@ -34,6 +40,7 @@ export default class PredictedMessages extends Service {
     });
     this.runtime = new PredictionRuntime({
       llm: ctx.llm,
+      readSummaries,
       readState: session => projection.stateOf(session),
       selection: session => this.config.provider ? { provider: this.config.provider, model: this.config.model } : ctx.agents.get(session.id)?.model.current() ?? session.requestHeader()?.config,
       config: this.config,
