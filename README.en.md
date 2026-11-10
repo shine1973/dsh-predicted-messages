@@ -1,6 +1,6 @@
 # DSH predicted messages
 
-[简体中文](README.md) · [Download](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.4) · [Issues](https://github.com/shine1973/dsh-predicted-messages/issues)
+[简体中文](README.md) · [Download](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.5) · [Issues](https://github.com/shine1973/dsh-predicted-messages/issues)
 
 A community plugin for DeepSeek Harness (DSH) that predicts your next message from the conversation. Suggestions appear above the composer; selecting one fills an editable draft and never sends it automatically.
 
@@ -24,13 +24,13 @@ Requires DSH with a working model provider. Developed and used with **DSH 0.2.2-
 In **Plugins → Add plugin**, paste the release archive URL:
 
 ```text
-https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.4/dsh-predicted-messages-0.1.4.tgz
+https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.5/dsh-predicted-messages-0.1.5.tgz
 ```
 
 Alternatively, with Git installed:
 
 ```text
-git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.4
+git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.5
 ```
 
 You can also ask the DSH agent to install either address through `plugin_manager` with `action: install_bundle`. Follow any restart instruction returned by DSH. Runtime dependencies are downloaded during installation; the archive contains no `node_modules` or install scripts. This release is distributed through GitHub and does not require an npm account.

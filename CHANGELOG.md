@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5 — 2026-11-10
+
+- Upgrade Zod from 4.4.3 to 4.6.7, outside the affected range of GHSA-mrhx-c7xc-m3w5.
+- Limit the actual session-state message array to ten items and bump its projection cache version so older checkpoints are rebuilt from the log.
+- Add five compatibility tests for valid checkpoints, oversized arrays, history replay, tool input validation, and command outcomes.
+- Verify live DSH loading and preference persistence with the upgraded dependency; production dependency audit reports zero known vulnerabilities at release time.
+
 ## 0.1.4 — 2026-11-10
 
 - Declare Cordis as an optional host-provided peer instead of a production dependency, avoiding a private framework copy and the shared-package dependency warning.

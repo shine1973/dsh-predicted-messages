@@ -6,7 +6,7 @@ import { PredictionRuntime, PROJECTION_KEY, initialState, foldContext } from './
 
 const viewSchema = z.object({ revision: z.number(), ready: z.boolean() });
 const stateSchema = z.object({
-  messages: z.array(z.object({ role: z.enum(['user', 'assistant']), text: z.string(), seq: z.number(), turn: z.number() })),
+  messages: z.array(z.object({ role: z.enum(['user', 'assistant']), text: z.string(), seq: z.number(), turn: z.number() })).max(10),
   view: viewSchema,
 });
 const inputSchema = z.object({ action: z.enum(['status', 'generate', 'configure']).default('status'), enabled: z.boolean().optional(), refresh: z.boolean().optional() }).strict();
@@ -28,7 +28,7 @@ export default class PredictedMessages extends Service {
   async [Service.init]() {
     const ctx = this.ctx;
     const projection = await ctx.sessionProjections.register({
-      key: PROJECTION_KEY, stateVersion: 1, stateSchema,
+      key: PROJECTION_KEY, stateVersion: 2, stateSchema,
       init: initialState, apply: foldContext,
       wire: { viewSchema, view: state => state.view, summary: false },
     });
