@@ -1,0 +1,5 @@
+- insert:
+    - id: local-predicted-messages
+      name: 'dsh-predicted-messages'
+      config:
+        enabled: true

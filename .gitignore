@@ -1,0 +1,10 @@
+node_modules/
+artifacts/
+.validation/
+coverage/
+*.tgz
+*.log
+.DS_Store
+.env
+.env.*
+!.env.example
