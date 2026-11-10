@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.3 — 2026-11-10
 
 - Avoid model requests when opening, restoring, or revisiting completed historical conversations. Automatic predictions require a running reply observed in the currently open conversation followed by a newer completed revision; existing cached suggestions remain reusable.
 - Align the suggestions with the composer by sharing its side-clearance and maximum-width CSS variables.

@@ -1,6 +1,6 @@
 # DSH predicted messages
 
-[简体中文](README.md) · [Download](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.2) · [Issues](https://github.com/shine1973/dsh-predicted-messages/issues)
+[简体中文](README.md) · [Download](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.3) · [Issues](https://github.com/shine1973/dsh-predicted-messages/issues)
 
 A community plugin for DeepSeek Harness (DSH) that predicts your next message from the conversation. Suggestions appear above the composer; selecting one fills an editable draft and never sends it automatically.
 
@@ -19,24 +19,18 @@ This independent plugin is not affiliated with OpenAI Codex.
 
 ## Install
 
-**Main-branch fixes:** the historical-conversation trigger and composer alignment fixes are on `main`, not in the v0.1.2 Release yet. To use those fixes, install:
-
-```text
-git+https://github.com/shine1973/dsh-predicted-messages.git#main
-```
-
 Requires DSH with a working model provider. Developed and used with **DSH 0.2.2-rc.1 on macOS Desktop**. Other platforms have not received full UI validation. The declared DSH range is `>=0.2.2-rc.1 <0.3.0`; API changes may require a plugin update.
 
 In **Plugins → Add plugin**, paste the release archive URL:
 
 ```text
-https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.2/dsh-predicted-messages-0.1.2.tgz
+https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.3/dsh-predicted-messages-0.1.3.tgz
 ```
 
 Alternatively, with Git installed:
 
 ```text
-git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.2
+git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.3
 ```
 
 You can also ask the DSH agent to install either address through `plugin_manager` with `action: install_bundle`. Follow any restart instruction returned by DSH. Runtime dependencies are downloaded during installation; the archive contains no `node_modules` or install scripts. This release is distributed through GitHub and does not require an npm account.

@@ -1,6 +1,6 @@
 # DSH 预测消息
 
-[English](README.en.md) · [下载首发版](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.2) · [反馈问题](https://github.com/shine1973/dsh-predicted-messages/issues)
+[English](README.en.md) · [下载最新版本](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.3) · [反馈问题](https://github.com/shine1973/dsh-predicted-messages/issues)
 
 一个 DeepSeek Harness（DSH）插件：根据当前对话预测你接下来可能发送的消息，点击建议即可填入可编辑草稿。
 
@@ -17,12 +17,6 @@
 
 ## 安装
 
-**主分支修复版：** 历史会话不自动预测、建议条宽度对齐的修复目前在 `main`，尚未包含在 v0.1.2 Release 中。需要这些修复时，在“添加插件”中使用：
-
-```text
-git+https://github.com/shine1973/dsh-predicted-messages.git#main
-```
-
 需要已配置可用模型的 DSH。首发版在 **DSH 0.2.2-rc.1 / macOS Desktop** 上开发和使用，其他平台尚未进行完整界面验收。包声明支持 `>=0.2.2-rc.1 <0.3.0`；DSH 接口变化可能需要更新插件。
 
 ### 从 Release 安装（推荐）
@@ -30,7 +24,7 @@ git+https://github.com/shine1973/dsh-predicted-messages.git#main
 打开 DSH 侧栏 **插件 → 添加插件**，粘贴以下地址并安装：
 
 ```text
-https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.2/dsh-predicted-messages-0.1.2.tgz
+https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.3/dsh-predicted-messages-0.1.3.tgz
 ```
 
 也可以下载 Release 中的 `.tgz` 文件，让 DSH 从该文件的绝对路径安装。安装时需要联网下载运行依赖，安装包不含 `node_modules`，也不包含安装脚本。
@@ -40,12 +34,12 @@ https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.2/dsh
 已安装 Git 时，可在“添加插件”中填写固定版本：
 
 ```text
-git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.2
+git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.3
 ```
 
 或者直接对 DSH 说：
 
-> 请安装这个插件：git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.2
+> 请安装这个插件：git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.3
 
 首发通过 GitHub 分发，不要求 npm 账号。Agent 可以通过 `plugin_manager` 的 `install_bundle` 操作安装上述地址。若 DSH 报告需要重启，按其提示重启。
 
