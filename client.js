@@ -7,25 +7,28 @@ window.__ModuleLoader__.load({
     const PROJECTION = 'localPredictedMessagesContext';
     // Embedded for the lazy browser artifact; keep identical to locale/*.json.
     const en = {
+      "request.generate": "Generate suggestions",
+      "request.pending": "Requesting…",
+      "request.hint": "Sends a visible request to this conversation model and uses tokens. Your draft stays unchanged.",
+      "request.disabled": "Enable predicted messages in plugin settings to request suggestions.",
+      "request.unavailable": "Suggestion requests are unavailable in this session or with your access.",
+      "request.waiting": "Waiting for this conversation. You can request again after it finishes.",
+      "request.empty": "No suggestions were submitted. You can request again.",
+      "error.request": "Could not request suggestions. Check the conversation before trying again.",
+      "request.text": "I clicked Generate suggestions. Based on our current conversation, only propose up to two useful next-message drafts in my language using predicted_messages with action submit. Do not carry out the proposed tasks, change settings, or invent consent or authorization. If no useful draft exists, submit an empty array. Finish with a brief reply.",
       title: 'Predicted messages',
-      description: 'Suggest up to two possible next messages using the current session model. Selecting a suggestion only fills the draft.',
+      description: 'Show up to two next-message drafts submitted by the conversation model. Selecting one only fills the editor.',
       toggle: 'Enable predicted messages',
       'settings.label': 'Show predicted messages',
-      'settings.description': 'Predict what you may send next from the conversation. Selecting a suggestion fills an editable draft.',
-      'settings.cost': 'Uses the conversation model and a small additional amount of model quota.',
+      'settings.description': 'Show optional next-message drafts submitted with a reply. Selecting one fills an editable draft.',
+      'settings.cost': 'No separate prediction request. Tool instructions, calls and results still use conversation tokens.',
       'settings.save': 'Save', 'settings.saving': 'Saving…', 'settings.saved': 'Saved',
       'settings.missing': 'The prediction configuration is unavailable',
       'settings.readonly': 'This connection cannot change plugin settings',
-      enabled: 'On', disabled: 'Off', refresh: 'Refresh', retry: 'Retry',
+      enabled: 'On', disabled: 'Off', retry: 'Retry',
       hide: 'Hide this round', insert: 'Fill draft: {text}',
-      'status.loading': 'Loading…', 'status.generating': 'Predicting…',
-      'status.waiting': 'Available after a reply',
-      'status.empty': 'No suggestions this round',
-      'status.busy': 'Prediction already in progress; refresh later',
-      'status.stale': 'Conversation changed; refresh to try again',
-      'status.hidden': 'Hidden for this round',
+      'status.loading': 'Loading…',
       'status.ready': 'Select a suggestion to edit before sending',
-      'status.cancelled': 'Prediction stopped; refresh to try again',
       'error.unavailable': 'This session is unavailable',
       'error.command': 'The prediction command is unavailable',
       'error.response': 'The prediction service returned an invalid response',
@@ -34,25 +37,28 @@ window.__ModuleLoader__.load({
       'error.configure': 'Could not save the prediction setting',
     };
     const zh = {
+      "request.generate": "生成建议",
+      "request.pending": "请求中…",
+      "request.hint": "发送一条可见请求给当前会话模型，会消耗 Tokens；保留现有草稿。",
+      "request.disabled": "请先在插件设置中开启预测消息，再申请建议。",
+      "request.unavailable": "当前会话或访问权限不支持申请建议。",
+      "request.waiting": "等待当前会话处理完成，结束后可再次申请。",
+      "request.empty": "本轮未提交建议，可再次申请。",
+      "error.request": "请求建议失败，请查看会话状态后再试。",
+      "request.text": "我点击了“生成建议”。请根据当前对话，仅用 predicted_messages 的 submit 操作提交最多两条有用的下一步消息草稿，使用我的语言。不要执行草稿中提议的任务，不要修改设置，不要虚构我的同意或授权。没有合适建议时提交空数组，最后简短回复即可。",
       title: '预测消息',
-      description: '使用当前会话模型，预测最多两条下一步消息。点击建议只填入草稿。',
+      description: '显示主模型随回复提交的最多两条下一步草稿。点击建议只填入编辑器。',
       toggle: '启用预测消息',
       'settings.label': '显示预测消息',
-      'settings.description': '根据对话预测你接下来要发送的消息，点击建议后可编辑再发送。',
-      'settings.cost': '使用当前会话模型，会额外消耗少量模型配额。',
+      'settings.description': '显示主模型随回复提交的可选下一步草稿，点击后可编辑再发送。',
+      'settings.cost': '不发起独立预测请求；工具说明、调用和结果仍消耗主对话 Tokens。',
       'settings.save': '保存', 'settings.saving': '保存中…', 'settings.saved': '已保存',
       'settings.missing': '暂时无法读取预测消息配置',
       'settings.readonly': '当前连接无权修改插件设置',
-      enabled: '开', disabled: '关', refresh: '刷新', retry: '重试',
+      enabled: '开', disabled: '关', retry: '重试',
       hide: '隐藏本轮', insert: '填入草稿：{text}',
-      'status.loading': '读取中…', 'status.generating': '预测中…',
-      'status.waiting': '回复完成后可用',
-      'status.empty': '本轮暂无建议',
-      'status.busy': '预测已在进行中，可稍后刷新',
-      'status.stale': '会话已更新，可刷新重试',
-      'status.hidden': '已隐藏本轮',
+      'status.loading': '读取中…',
       'status.ready': '点击建议，编辑后再发送',
-      'status.cancelled': '预测已停止，可刷新重试',
       'error.unavailable': '当前会话暂不可用',
       'error.command': '预测消息命令暂不可用',
       'error.response': '预测服务返回了无效结果',
@@ -92,7 +98,6 @@ window.__ModuleLoader__.load({
 .dsh-predicted-messages__save{padding:6px 16px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)!important}
 @media(prefers-reduced-motion:reduce){.dsh-predicted-messages__thumb{transition:none}}
 `;
-
     function parsePayload(remote, t) {
       if (!remote || remote.ok !== true) {
         const error = new Error(remote?.error?.message || t('error.failed'));
@@ -118,43 +123,69 @@ window.__ModuleLoader__.load({
         model: typeof payload.model === 'string' ? payload.model : undefined,
       };
     }
-
-    // This gate belongs to one mounted conversation, never its restored history.
-    // Only a running reply observed while the session is open can arm automation.
-    function createAutomaticPredictionGate() {
-      let activeRevision = null;
-      let automaticRevision = null;
-      let lastRevision = null;
+    function insertDraft(inputActions, draftRev, text) {
+      if (!inputActions) return false;
+      const span = inputActions.captureInsertion();
+      return span.draftRev === draftRev && span.start === 0 && span.end === 0
+        && inputActions.insertText(text, span);
+    }
+    // One user-click request per Session until admission and its visible echo settle.
+    // This calls the standard human prompt path, never an independent model API.
+    function createSuggestionRequester(bindingOf, changed = () => {}) {
+      const pending = new Map();
+      let disposed = false;
+      function release(id, entry) {
+        if (entry.settled && entry.retired && pending.get(id) === entry) {
+          pending.delete(id);
+          changed();
+        }
+      }
       return {
-        observe({ revision, ready, running, openState, enabled }) {
-          if (openState !== 'open' || !Number.isSafeInteger(revision) || revision < 0
-            || enabled === false || (lastRevision !== null && revision < lastRevision)) {
-            activeRevision = null;
-            automaticRevision = null;
-            lastRevision = Number.isSafeInteger(revision) ? revision : null;
-            return;
-          }
-          lastRevision = revision;
-          if (running) {
-            // Keep the start watermark: ready may arrive before running=false.
-            if (activeRevision === null) activeRevision = revision;
-            automaticRevision = null;
-          } else if (ready && activeRevision !== null && revision > activeRevision) {
-            automaticRevision = revision;
-            activeRevision = null;
+        isPending: id => pending.has(id),
+        async request(id, text, allowed) {
+          if (disposed || pending.has(id) || !allowed()) return false;
+          const session = bindingOf(id)?.session;
+          const snapshot = session?.getSnapshot();
+          if (!snapshot || snapshot.running !== false || snapshot.openState !== 'open'
+            || snapshot.removed !== false || snapshot.subagent != null
+            || snapshot.awaitingFirstTurn || snapshot.pendingSubmissions.length > 0) return false;
+          const entry = { controller: new AbortController(), settled: false, retired: false };
+          pending.set(id, entry);
+          changed();
+          let handle;
+          try {
+            handle = session.beginSubmission({ mode: 'queue', text, attachments: [], onRetire() {
+              entry.retired = true;
+              release(id, entry);
+            } });
+            const result = await session.prompt([{ type: 'text', text }], 'queue', entry.controller.signal, handle.requestId);
+            if (!result.ok) throw result.error;
+            if (result.value?.accepted !== true) throw new Error('Invalid prompt acceptance.');
+            return true;
+          } catch (error) {
+            handle?.abandon();
+            entry.retired = true;
+            throw error;
+          } finally {
+            entry.settled = true;
+            release(id, entry);
           }
         },
-        allows(revision) { return automaticRevision !== null && automaticRevision === revision; },
+        dispose() {
+          disposed = true;
+          for (const entry of pending.values()) entry.controller.abort();
+          pending.clear();
+        },
       };
     }
-
     return {
-      createAutomaticPredictionGate,
+      insertDraft,
+      createSuggestionRequester,
       inject: ['slots', 'sessions', 'locale'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { en, zh }), 'predicted-messages: dictionaries');
         // Own browser-local suppression and shared switch state in the plugin lifetime.
-        // The Host remains the authority for the durable switch and suggestion cache.
+        // The Host remains the authority for the durable switch and durable suggestions.
         const rounds = new Map();
         const listeners = new Set();
         let settings = { enabled: null, pending: false };
@@ -162,6 +193,9 @@ window.__ModuleLoader__.load({
         const requests = new Set();
         const subscribe = listener => { listeners.add(listener); return () => listeners.delete(listener); };
         const getSettings = () => settings;
+        const requester = createSuggestionRequester(id => ctx.sessions.binding(id), () => {
+          for (const listener of listeners) listener();
+        });
         const publishSettings = next => {
           if (settings.enabled === next.enabled && settings.pending === next.pending) return;
           settings = next;
@@ -170,10 +204,10 @@ window.__ModuleLoader__.load({
         ctx.effect(() => () => {
           for (const controller of requests) controller.abort();
           requests.clear();
+          requester.dispose();
           rounds.clear();
           listeners.clear();
         }, 'predicted-messages: requests and local state');
-
         async function command(sessionId, args, signal, t) {
           const scope = ctx.sessions.scope(sessionId);
           if (!scope) throw new Error(t('error.unavailable'));
@@ -191,11 +225,10 @@ window.__ModuleLoader__.load({
         }
         function recordFor(sessionId) {
           if (!rounds.has(sessionId)) rounds.set(sessionId, {
-            attemptedRevision: null, hiddenRevision: null, response: null,
+            hiddenRevision: null,
           });
           return rounds.get(sessionId);
         }
-
         function PredictionDock(props) {
           const { sessionId, inputActions, t } = props;
           const revision = props.useProjection(PROJECTION, value => value?.revision);
@@ -203,217 +236,94 @@ window.__ModuleLoader__.load({
           const running = props.useSession(session => session.running);
           const openState = props.useSession(session => session.openState);
           const removed = props.useSession(session => session.removed);
+          const subagent = props.useSession(session => session.subagent);
+          const pendingSubmissions = props.useSession(session => session.pendingSubmissions.length);
+          const awaitingFirstTurn = props.useSession(session => session.awaitingFirstTurn);
+          const canPrompt = props.useSessionAccess(sessionId, 'session/prompt');
+          const requesting = React.useSyncExternalStore(subscribe, () => requester.isPending(sessionId), () => false);
           const draft = props.useInput(input => input.draft);
           const draftRev = props.useInput(input => input.draftRev);
           const attachmentCount = props.useInput(input => input.attachmentIds.length);
           const phase = props.useInput(input => input.phase);
           const switches = React.useSyncExternalStore(subscribe, getSettings, getSettings);
           const record = recordFor(sessionId);
-          const [view, setView] = React.useState(() => record.response);
+          const [view, setView] = React.useState(null);
           const [error, setError] = React.useState('');
-          const [generating, setGenerating] = React.useState(false);
-          const [reading, setReading] = React.useState(false);
-          const [checkedRevision, setCheckedRevision] = React.useState(null);
-          const [readNonce, setReadNonce] = React.useState(0);
-          const [hiddenRevision, setHiddenRevision] = React.useState(() => record.hiddenRevision);
-          const alive = React.useRef(false);
-          const generation = React.useRef(null);
-          const statusRequest = React.useRef(null);
-          const automaticGate = React.useRef(null);
-          if (automaticGate.current === null) automaticGate.current = createAutomaticPredictionGate();
-          // Whitespace is still a user's draft: only a truly empty editor is eligible.
+          const [hiddenRevision, setHiddenRevision] = React.useState(record.hiddenRevision);
           const empty = draft === '' && attachmentCount === 0 && phase === 'plain';
           const idle = running === false && removed === false && openState === 'open';
-          const validRevision = Number.isSafeInteger(revision) && revision >= 0;
-          const eligible = idle && empty && ready && validRevision && switches.enabled === true && !switches.pending;
+          const eligible = idle && empty && ready && switches.enabled === true && !switches.pending;
+          const canGenerate = idle && !subagent && !awaitingFirstTurn && pendingSubmissions === 0
+            && switches.enabled === true && !switches.pending && canPrompt && !requesting;
           const latest = React.useRef(null);
-          latest.current = { revision, eligible, empty, draftRev, idle };
-
-          const cancelGeneration = React.useCallback(() => {
-            const request = generation.current;
-            if (!request) return;
-            generation.current = null;
-            request.controller.abort();
-            // Keep attemptedRevision. Cancellation must never schedule another
-            // model request at this revision, including after a session remount.
-            if (alive.current) setGenerating(false);
-          }, []);
-
-          React.useLayoutEffect(() => {
+          latest.current = { revision, eligible, draftRev, canGenerate, canPrompt };
+          const alive = React.useRef(false);
+          React.useEffect(() => {
             alive.current = true;
-            return () => {
-              alive.current = false;
-              cancelGeneration();
-              statusRequest.current?.abort();
-            };
-          }, [cancelGeneration]);
-          React.useLayoutEffect(() => {
-            automaticGate.current.observe({ revision, ready, running, openState, enabled: switches.enabled });
-            if (!eligible || generation.current?.revision !== revision) cancelGeneration();
-          }, [eligible, revision, ready, running, openState, switches.enabled, cancelGeneration]);
-
-          function acceptSetting(payload, epoch) {
-            if (settingEpoch === epoch && !settings.pending) {
-              publishSettings({ enabled: payload.enabled, pending: false });
+            return () => { alive.current = false; };
+          }, []);
+          async function generate() {
+            if (!latest.current.canGenerate) return;
+            setError('');
+            try {
+              await requester.request(sessionId, t('request.text'), () => alive.current && latest.current.canPrompt
+                && settings.enabled === true && !settings.pending);
+            } catch (reason) {
+              if (alive.current) setError(reason.message || t('error.request'));
             }
           }
-          function acceptView(payload, expectedRevision) {
-            if (payload.revision !== expectedRevision) return false;
-            record.response = payload;
-            setView(payload);
-            return true;
-          }
-
-          // status performs no model request, so the switch can be read even
-          // while the user is typing or the main reply is running.
           React.useEffect(() => {
-            setCheckedRevision(null);
-            setReading(false);
-            if (!validRevision || switches.pending) return;
+            setView(null);
+            setError('');
+            if (!Number.isSafeInteger(revision) || switches.pending || openState !== 'open') return;
             const controller = makeController();
-            statusRequest.current = controller;
             const epoch = settingEpoch;
-            setReading(true);
-            setError('');
             command(sessionId, { action: 'status' }, controller.signal, t).then(payload => {
-              if (!alive.current || controller.signal.aborted || statusRequest.current !== controller
-                || latest.current.revision !== revision || settingEpoch !== epoch) return;
-              acceptSetting(payload, epoch);
-              if (acceptView(payload, revision)) {
-                if (payload.status === 'ready' || payload.status === 'busy') record.attemptedRevision = revision;
-                setCheckedRevision(revision);
-              }
+              if (controller.signal.aborted || latest.current.revision !== revision || settingEpoch !== epoch) return;
+              if (!settings.pending) publishSettings({ enabled: payload.enabled, pending: false });
+              if (payload.revision === revision) setView(payload);
             }).catch(reason => {
-              if (alive.current && !controller.signal.aborted && statusRequest.current === controller) {
-                setError(reason.message || t('error.failed'));
-              }
-            }).finally(() => {
-              requests.delete(controller);
-              if (statusRequest.current === controller) {
-                statusRequest.current = null;
-                if (alive.current) setReading(false);
-              }
-            });
-            return () => {
-              controller.abort();
-              if (statusRequest.current === controller) statusRequest.current = null;
-            };
-          }, [sessionId, revision, validRevision, switches.pending, readNonce]);
-
-          const generate = React.useCallback(refresh => {
-            const current = latest.current;
-            if (!alive.current || !current.eligible || settings.pending || settings.enabled !== true
-              || generation.current) return;
-            if (!refresh && (!automaticGate.current.allows(current.revision)
-              || record.attemptedRevision === current.revision || record.hiddenRevision === current.revision)) return;
-            const controller = makeController();
-            const request = { controller, revision: current.revision, epoch: settingEpoch };
-            generation.current = request;
-            record.attemptedRevision = current.revision;
-            record.hiddenRevision = null;
-            setHiddenRevision(null);
-            setError('');
-            setGenerating(true);
-            command(sessionId, { action: 'generate', ...(refresh ? { refresh: true } : {}) }, controller.signal, t)
-              .then(payload => {
-                if (!alive.current || controller.signal.aborted || generation.current !== request
-                  || latest.current.revision !== request.revision || !latest.current.eligible
-                  || settingEpoch !== request.epoch || settings.enabled !== true || settings.pending) return;
-                acceptSetting(payload, request.epoch);
-                if (!acceptView(payload, request.revision)) {
-                  setView({ revision: request.revision, status: 'stale', suggestions: [] });
-                }
-              }).catch(reason => {
-                if (alive.current && !controller.signal.aborted && generation.current === request) {
-                  setError(reason.message || t('error.failed'));
-                }
-              }).finally(() => {
-                requests.delete(controller);
-                if (generation.current === request) {
-                  generation.current = null;
-                  if (alive.current) setGenerating(false);
-                }
-              });
-          }, [sessionId, record, t]);
-
-          React.useEffect(() => {
-            if (eligible && checkedRevision === revision) generate(false);
-          }, [eligible, checkedRevision, revision, generate]);
-
+              if (!controller.signal.aborted) setError(reason.message || t('error.failed'));
+            }).finally(() => requests.delete(controller));
+            return () => controller.abort();
+          }, [sessionId, revision, openState, switches.pending, switches.enabled]);
           function hide() {
             record.hiddenRevision = revision;
-            record.attemptedRevision = revision;
             setHiddenRevision(revision);
-            setError('');
-            cancelGeneration();
-          }
-          function refresh() {
-            if (settings.enabled === null || error && checkedRevision !== revision) {
-              setReadNonce(value => value + 1);
-              return;
-            }
-            generate(true);
           }
           function insert(text) {
             const current = latest.current;
-            if (!current.eligible || settings.enabled !== true || settings.pending || generating
+            if (!current.eligible || settings.enabled !== true || settings.pending
               || current.revision !== view?.revision || !inputActions) return;
-            const span = inputActions.captureInsertion();
-            // Compare the live editor with the exact empty draft shown by this
-            // render; insertText checks that revision again atomically.
-            if (span.draftRev !== current.draftRev || span.start !== 0 || span.end !== 0
-              || !inputActions.insertText(text, span)) {
+            // Compare the live editor, then insertText performs the atomic CAS.
+            if (!insertDraft(inputActions, current.draftRev, text)) {
               setError(t('error.draftChanged'));
               return;
             }
             hide();
           }
-
-          const hidden = hiddenRevision === revision;
-          const currentView = view?.revision === revision ? view : null;
-          const suggestions = eligible && !hidden && !generating && currentView?.status === 'ready'
-            ? currentView.suggestions : [];
-          const canRefresh = idle && empty && validRevision && !switches.pending && !reading && !generating
-            && (switches.enabled === null || switches.enabled === true && ready);
-          let status = '';
-          if (error) status = error;
-          else if (switches.pending || reading) status = t('status.loading');
-          else if (switches.enabled === true && idle && empty) {
-            if (generating) status = t('status.generating');
-            else if (hidden) status = t('status.hidden');
-            else if (!ready) status = t('status.waiting');
-            else if (currentView?.status === 'ready') status = '';
-            else if (currentView && ['busy', 'stale'].includes(currentView.status)) status = t(`status.${currentView.status}`);
-            else if (record.attemptedRevision === revision && currentView?.status !== 'empty') status = t('status.cancelled');
-            else if (checkedRevision === revision && record.attemptedRevision === revision) status = t('status.empty');
-          }
-          // The conversation only shows useful suggestions or an active result/error.
-          // The persistent preference lives on the plugin page.
-          if (!idle || !empty || switches.enabled === false || hidden
-            || (!generating && !error && suggestions.length === 0)) return null;
+          const suggestions = eligible && hiddenRevision !== revision && view?.revision === revision
+            && view.status === 'ready' ? view.suggestions : [];
+          const notice = switches.enabled === false ? 'request.disabled'
+            : subagent || !canPrompt ? 'request.unavailable'
+            : requesting || running || awaitingFirstTurn || pendingSubmissions ? 'request.waiting'
+            : view?.status === 'empty' ? 'request.empty' : 'request.hint';
           return h('div', { className: 'dsh-predicted-messages__frame' },
             h('section', { className: 'dsh-predicted-messages dsh-predicted-messages--dock', 'aria-label': t('title') },
-            h('style', null, CSS),
-            h('div', { className: 'dsh-predicted-messages__bar' },
-              h('span', { className: 'dsh-predicted-messages__title', title: t('description') }, t('title')),
-              h('div', { className: 'dsh-predicted-messages__actions' },
-                (switches.enabled !== false || error) && h('button', {
-                  type: 'button', className: 'dsh-predicted-messages__action', disabled: !canRefresh,
-                  onClick: refresh,
-                }, t(switches.enabled === null ? 'retry' : 'refresh')),
-                switches.enabled === true && !hidden && (generating || suggestions.length > 0) && h('button', {
-                  type: 'button', className: 'dsh-predicted-messages__action', onClick: hide,
-                }, t('hide')))),
-            suggestions.length > 0 && h('div', {
-              className: 'dsh-predicted-messages__suggestions', 'aria-label': t('status.ready'),
-            }, suggestions.map(text => h('button', {
-              key: text, type: 'button', className: 'dsh-predicted-messages__suggestion',
-              'aria-label': t('insert', { text }), onClick: () => insert(text),
-            }, text))),
-            status && h('p', {
-              className: `dsh-predicted-messages__status${error ? ' dsh-predicted-messages__error' : ''}`,
-              role: 'status', 'aria-live': 'polite',
-            }, status)));
+              h('style', null, CSS),
+              h('div', { className: 'dsh-predicted-messages__bar' },
+                h('span', { className: 'dsh-predicted-messages__title', title: t('description') }, t('title')),
+                h('div', { className: 'dsh-predicted-messages__actions' },
+                  h('button', { type: 'button', className: 'dsh-predicted-messages__action',
+                    disabled: !canGenerate, onClick: generate, title: t('request.hint') }, t(requesting ? 'request.pending' : 'request.generate')),
+                  suggestions.length > 0 && h('button', { type: 'button', className: 'dsh-predicted-messages__action', onClick: hide }, t('hide')))),
+              h('p', { role: 'status' }, t(notice)),
+              suggestions.length > 0 && h('div', { className: 'dsh-predicted-messages__suggestions', 'aria-label': t('status.ready') },
+                suggestions.map(text => h('button', {
+                  key: text, type: 'button', className: 'dsh-predicted-messages__suggestion',
+                  'aria-label': t('insert', { text }), onClick: () => insert(text),
+                }, text))),
+              error && h('p', { role: 'status', className: 'dsh-predicted-messages__error' }, error)));
         }
         function PredictionSettings({ t, useRemoteAccess }) {
           const canRead = useRemoteAccess('settings/describe');
@@ -533,7 +443,7 @@ window.__ModuleLoader__.load({
         ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
           name: 'conversation.input.dock', id: 'local-predicted-messages-aligned', order: 40, locale: NS,
         }, Entry));
-        // Automatic prediction commands belong in the dock, not generic Chat cards.
+        // Read-only status commands belong in the dock, not generic Chat cards.
         ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register({
           name: 'conversation.chat.commandview', key: 'predicted-messages',
         }, () => null));

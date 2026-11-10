@@ -1,131 +1,77 @@
 # DSH 预测消息
 
-[English](README.en.md) · [下载最新版本](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.6) · [反馈问题](https://github.com/shine1973/dsh-predicted-messages/issues)
+[English](README.en.md) · [反馈问题](https://github.com/shine1973/dsh-predicted-messages/issues)
 
-一个 DeepSeek Harness（DSH）插件：根据当前对话预测你接下来可能发送的消息，点击建议即可填入可编辑草稿。
+在 DeepSeek Harness 输入框上方显示主模型提交的下一步消息草稿。点击只填入编辑器，由你编辑和发送。
 
-- 当前正在查看的会话完成新一轮回复后，输入框上方显示最多两条建议。
-- 打开或切回历史会话只读取已有缓存，不自动消耗模型配额。
-- 建议条沿用输入框的宽度与边距，跟随窗口及正文宽度调整。
-- 点击只填入草稿，由你编辑和发送，不自动发送消息。
-- 支持刷新、隐藏本轮；输入文字或切换会话时取消过期预测。
-- 开关放在 **插件 → 预测消息 → 显示预测消息**，调整后点击 **保存**。
-- 关闭功能、正在输入或没有建议时，聊天区不保留空条。
-- 默认复用当前会话模型，无需单独填写 API Key；支持中英文界面及宿主明暗主题。
+> 下述功能已更新到 `main`，尚未发布新版 Release 安装包；包版本暂保留 0.1.6。已发布的 v0.1.6 仍采用独立预测请求，不包含主模型建议和手动按钮。更新详情见 [更新记录](CHANGELOG.md)。
 
-这是独立社区插件，与 OpenAI Codex 无隶属关系。
+## 安装 main 分支版本
 
-## 安装
-
-需要已配置可用模型的 DSH。首发版在 **DSH 0.2.2-rc.1 / macOS Desktop** 上开发和使用，其他平台尚未进行完整界面验收。包声明支持 `>=0.2.2-rc.1 <0.3.0`；DSH 接口变化可能需要更新插件。
-
-### 从 Release 安装（推荐）
-
-打开 DSH 侧栏 **插件 → 添加插件**，粘贴以下地址并安装：
+在 DSH「插件 → 添加插件」中使用：
 
 ```text
-https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.6/dsh-predicted-messages-0.1.6.tgz
+git+https://github.com/shine1973/dsh-predicted-messages.git#main
 ```
 
-也可以下载 Release 中的 `.tgz` 文件，让 DSH 从该文件的绝对路径安装。安装时需要联网下载运行依赖，安装包不含 `node_modules`，也不包含安装脚本。
+按插件管理器提示重新加载或重启。已使用本地开发包 `@local/dsh-predicted-messages` 时，不要同时启用公开包，避免重复注册。
 
-### 从 GitHub 安装
+## 使用方式
 
-已安装 Git 时，可在“添加插件”中填写固定版本：
+主模型在合适的任务答复结尾调用 `predicted_messages`，提交零到两条简短草稿。成功完成本轮后，输入框为空且无附件时显示建议。主模型可以不提交；输入框附近的“生成建议”按钮始终保留，可手动申请。
 
-```text
-git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.6
-```
+点击“生成建议”会向当前会话发送一条可见用户请求，请主模型仅通过 `predicted_messages submit` 提出草稿，不执行草稿里的任务或修改设置。这会产生一轮主模型请求并消耗 Tokens；现有编辑器文字和附件保持不变。没有点击不会主动发送。会话运行、请求等待、显示开关关闭、权限不足或非普通会话时按钮禁用；当前不支持在子代理会话内手动申请。没有生成建议时提示可再次申请，不会自动重试。
 
-或者直接对 DSH 说：
+点击建议使用 `captureInsertion` / `insertText` 比较并交换（CAS），保留用户已修改的草稿；点击建议本身不会发送消息。可隐藏本轮。显示开关位于 **插件 → 预测消息 → 显示预测消息**，修改后点击 **保存**，作用于当前 profile。
 
-> 请安装这个插件：git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.6
+刷新生成入口已移除。打开历史、切换会话和读取状态不会发起预测请求。恢复同一会话可以显示其最后成功轮已持久化的建议；fork 继承的父会话建议不会显示为新会话建议。
 
-首发通过 GitHub 分发，不要求 npm 账号。Agent 可以通过 `plugin_manager` 的 `install_bundle` 操作安装上述地址。若 DSH 报告需要重启，按其提示重启。
+## 数据与成本
 
-之前装过开发版 `@local/dsh-predicted-messages` 的用户，应先停用或卸载开发版，再安装公开版，避免重复注册同名工具。
+插件不再调用独立 LLM，不读取 billion-context 摘要，也不使用 SessionManager。主模型直接利用它已有的对话上下文提出草稿。工具说明、工具调用、工具结果，以及工具调用后的主模型续写仍可能增加主对话 Tokens 和延迟；这不是零成本。
 
-## 使用
+工具说明要求使用用户语言、不要虚构同意或授权。运行时验证格式，不能自动判断每条自然语言建议的事实或授权含义；草稿可能不准确，用户仍需审阅。
 
-1. 安装后打开任意有对话内容的会话，完成一轮问答。
-2. 保持输入框为空，等待输入框上方出现建议。
-3. 点击建议，按需要编辑，再正常发送。
-4. **刷新**重新预测；**隐藏本轮**收起当前建议。
-5. 要关闭自动预测，进入 **插件 → 预测消息**，关闭 **显示预测消息**，点击 **保存**。
-
-生成主回复时、输入框包含文字或附件时，不会自动发起预测。失败会显示错误；模型认为没有合适的后续消息时，可以不提供建议。
-
-## 模型与数据
-
-每次预测会额外请求一次已有模型，消耗相应的模型配额。插件选择该模型支持的最低推理档位，默认 30 秒超时；同一轮缓存结果，避免重复请求。手动刷新有两秒冷却。
-
-最近对话包含实际用户文字和每轮最后保留的助手文字，最多 10 条，每条最多 6,000 字符，最近文字预算默认 12,000 个 UTF-16 单元。最近对话不包含思考内容、工具结果、图片或完整系统提示。已有摘要可能概括更早的历史内容。文字会通过 DSH 现有模型路由发送给你配置的提供方；本插件不新增第三方分析服务，不读取或保存 API Key。
-
-建议是模型生成的草稿，可能不符合你的意图；采用后仍可以编辑，不会自动授权或执行建议内容。
-
-已有 billion-context 摘要通过本机只读 detail API 按精确会话 ID 获取，无 latest 回退，不新增总结模型调用。摘要为历史数据，最新对话优先。仅筛选活跃块、排除其嵌套重复，按创建时间倒序截取，不执行相关性检索。接口已验证 billion-context 0.1.213，属于内部 Web API；结构变化、不可用、超过 2 MiB 或 1.5 秒超时均回退最近对话。地址从 XDG_STATE_HOME（默认 ~/.local/state）下 billion-context/proxy-origin 自动发现，也支持显式本机 HTTP origin。
-
-预算按 JavaScript UTF-16 长度计算，不是 token：最近文字优先，摘要独立最多 4,000，总 JSON 用户输入最多 16,000，包含 JSON 转义和字段开销；不包含固定系统提示和协议封装。转义开销较大时最近文字也会裁剪。summaryChars=0 禁止摘要读取。仅真正预测且缓存未命中时读取，打开历史或 status 不读取摘要。
-
-## 配置
-
-“显示预测消息”开关通过 DSH 的配置接口保存，作用于当前 profile 的所有会话。高级字段由 DSH 的插件配置系统管理：
-
-| 字段 | 默认值 | 含义 |
-|---|---|---|
-| `enabled` | `true` | 自动预测开关 |
-| `provider` | 空 | 预测模型提供方；空则跟随会话 |
-| `model` | 空 | 预测模型；必须与 `provider` 同时填写 |
-| `contextChars` | `12000` | 最近文字上限，范围 1,000–20,000 |
-| `summaryChars` | `4000` | 摘要独立上限，0–20,000；0 禁用 |
-| `totalChars` | `16000` | 序列化用户输入上限，1,000–40,000，必须不小于各独立预算 |
-| `summaryOrigin` | 空 | 自动发现；仅支持 loopback HTTP origin |
-| `timeoutMs` | `30000` | 请求超时毫秒数，范围 5,000–60,000 |
-
-插件包名为 `dsh-predicted-messages`。配置行 ID 保留为 `local-predicted-messages`，便于沿用开发版配置；插件不直接改写 profile 文件。
-
-Agent 工具 `predicted_messages` 与命令 `/predicted-messages` 支持以下参数：
+## 工具与兼容
 
 ```json
-{"action":"status"}
+{"action":"submit","suggestions":["运行测试并解释结果。","介绍下一步的取舍。"]}
 ```
 
-```json
-{"action":"configure","enabled":false}
-```
+- `submit` 仅接受当前轮的主模型直接工具调用：最多两条不同的非空纯文本，每条最多 160 个 Unicode 码点；拒绝控制字符、以 `/` 开头的命令和未知字段。空数组清除本轮待显示建议。
+- `status`（默认）只读已有建议。
+- `configure` 要求布尔值 `enabled`，仅在用户要求时修改显示开关。
+- 旧 `generate` 和 `refresh` 参数继续接受，但只返回当前状态，不生成、不刷新、不发请求。
+- `/predicted-messages` 命令支持状态和配置，拒绝缺乏工具调用绑定的 `submit`。
 
-```json
-{"action":"generate","refresh":true}
-```
+旧 `provider`、`model`、`contextChars`、`summaryChars`、`totalChars`、`summaryOrigin`、`timeoutMs` 配置继续解析但忽略，不要求清理 profile。有效配置只有 `enabled`，默认 `true`。
 
-会话仍在运行或没有完成的回复时，`generate` 返回 `busy`，不调用模型。
+工具执行上下文没有 turn 字段。插件使用实际 `tool/call` 的 turn、step、callId，并匹配 `tool/result` 的工具来源、非错误状态及提交回执中的 sessionId/turn/callId/草稿内容。只有 `turn/end.reason.kind === 'completed'` 才发布。它不信任助手消息内的同形 JSON 或单独工具参数。
 
-## 本地开发
+新用户消息、inbox 变更、新轮、模型切换和 surface replacement 清除旧建议；失败、取消、中断、max-tokens、blocked、forked 结尾均不显示。surface replacement 采用保守清空，不把端点当作数值区间；本轮余下的建议可能因此缺失。投影 `stateVersion: 3` 强制重折叠旧缓存，跳过 fork 的 inheritedEventCount 前缀；不写自定义 session 事件。
 
-要求 Node.js 22 或更新版本。
+当前支持具有标准 `tool/call` / `tool/result` 持久日志的直接工具路径。未核实 PTC 子调用日志契约，因此没有对应直接调用记录的提交会明确失败，不猜测归属。主模型未调用工具时，不提供后备模型预测。
 
-Cordis 是 DSH 提供的可选共享依赖（peer dependency），不作为插件的生产依赖安装。`npm ci` 会为本地开发安装 Cordis 开发依赖；正式插件由 DSH 的宿主解析器提供 Cordis。不要把它重新加入 `dependencies`，也不要将开发依赖打进发布包。
+## 本地开发与安装交接
+
+需要 Node.js 22+；声明 DSH `>=0.2.2-rc.1 <0.3.0`。31 项回归测试已通过，覆盖持久化结果绑定、生命周期与组件交互。本机已验证插件加载、真实主模型提交和完成轮建议持久化；用户点击手动按钮已成功发送请求并触发提交工具。最终页面显示与草稿插入尚未完成视觉验收，自动测试不代表全平台验收。
 
 ```sh
-git clone https://github.com/shine1973/dsh-predicted-messages.git
-cd dsh-predicted-messages
 npm ci --ignore-scripts
 npm run check
 npm test
 npm pack --ignore-scripts
 ```
 
-将项目目录交给 DSH 的 `plugin_manager` 安装即可开发。目录安装使用链接，安装后不要移动或删除该目录。修改客户端后需让 DSH 重新加载对应插件；修改 Host 代码后遵循管理器的重启提示，不以页面刷新代替 Host 重启。
+Cordis 是宿主提供的 optional peer；不要打包私有生产副本。本地源码没有构建步骤，客户端是惰性模块。使用 DSH `plugin_manager` 先列出准确包名与现有安装，再安装审阅后的本地包或目录；遵守管理器返回的 reload/restart 指示。该步骤会修改本机 profile，应由执行安装的代理完成。客户端更新后刷新现有 GUI 并验证，不能启动替代服务器冒充更新。
 
-- [index.js](index.js)：Host 服务、配置、命令与工具。
-- [core.js](core.js)：会话投影、上下文预算、请求、缓存与取消。
-- [client.js](client.js)：建议条和插件设置页。
-- [test/core.test.js](test/core.test.js)：关键行为测试。
+安装验收：检查新工具 schema；完成一次真实 `submit` 工具调用并结束本轮；确认最多两条建议只填草稿不发送；测试新轮、取消、切换、fork、显示开关，以及旧 generate 不发生模型请求。
 
-自动测试覆盖上下文边界、缓存、取消、过期结果和错误处理；GitHub Actions 检查 Node.js 22/24。自动测试不等同于所有 DSH 版本和平台上的界面验收。
+- [index.js](index.js)：Host 注册、持久配置、命令、工具及投影 schema。
+- [core.js](core.js)：纯函数 `validateInput(input = {})`、`initialState(header = {}, inheritedEventCount = 0)`、`foldContext(state, event)`；`PredictionRuntime` 只读投影和保存开关。
+- [client.js](client.js)：建议条、CAS 插入与设置页。
+- [test/core.test.js](test/core.test.js)：持久结果绑定及生命周期回归。
 
-## 反馈与许可
-
-遇到问题请在 [Issues](https://github.com/shine1973/dsh-predicted-messages/issues) 中附上 DSH 版本、插件版本、模型提供方和复现步骤。分享截图或日志前请去掉 API Key 和私人对话。
+旧摘要实验的六个文件、完整 git diff、SHA256 清单和旧测试保存在仓库外的独立备份目录 `../dsh-predicted-messages-selector-backup-20261110/`。本分支删除摘要读取模块及其测试，保留备份以便独立复核。
 
 [MIT License](LICENSE) · [更新记录](CHANGELOG.md)

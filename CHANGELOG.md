@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased — 主模型建议与手动生成按钮
+
+- 改由当前会话主模型通过 `predicted_messages submit` 提交最多两条下一步草稿；移除独立预测模型请求和摘要读取。主模型可以不提交建议，工具说明、调用与续写仍消耗 Tokens。
+- 输入框上方新增常驻“生成建议”按钮，无建议时也可使用。点击发送一条可见的会话请求，保留现有草稿和附件；运行中禁用，防止重复提交，失败显示错误且不自动重试。
+- 建议与实际工具调用、会话及轮次绑定，仅在回复成功完成后显示；新轮、失败、取消、历史替换和 fork 不复用过期建议。
+- 保留点击仅填草稿、CAS 草稿保护、隐藏本轮和插件设置开关。旧 `generate` / `refresh` 仅返回状态，旧模型及摘要配置接受但忽略。
+- 31 项回归测试覆盖持久化绑定、生命周期、格式校验和真实组件交互；本机插件加载、真实主模型提交及完成轮持久化已验证。用户点击按钮已产生可见请求并成功调用提交工具；页面最终显示和实际草稿插入尚未完成视觉验收。
+- 手动请求暂不支持子代理会话；PTC 子调用日志契约尚未核实，无匹配直接工具记录时拒绝提交。
+
+### English
+
+- Obtain optional drafts from the conversation model instead of a separate prediction or summary-reading pipeline.
+- Add a persistent **Generate suggestions** button that sends an explicit conversation request while preserving composer text and attachments, with pending-state, access and duplicate-request guards.
+- Bind suggestions to successful durable tool results and completed turns; preserve fill-only CAS insertion and clear stale state across lifecycle changes.
+- Keep legacy configuration parseable and legacy generation actions read-only. Cover the implementation with 31 regression tests; browser visual acceptance remains outstanding.
+
+These changes are on `main`; the published v0.1.6 archive retains the previous implementation.
+
 ## 0.1.6 — 2026-11-10
 
 - Reuse exact-session active billion-context summaries through bounded read-only loopback GET; no additional summarization model calls.

@@ -2,100 +2,110 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-
-// Load only the lazy module factory to test its pure trigger policy.
-// No React components, hooks, DOM, or rendering are simulated.
+const source = readFileSync(new URL('../client.js', import.meta.url), 'utf8');
 let bundle;
-vm.runInNewContext(readFileSync(new URL('../client.js', import.meta.url), 'utf8'), {
-  window: { __ModuleLoader__: { load(value) { bundle = value; } } },
+vm.runInNewContext(source, { AbortController, window: { __ModuleLoader__: { load(value) { bundle = value; } } } });
+const { insertDraft, createSuggestionRequester } = bundle.factory(() => ({}));
+test('insertion captures current editor and uses its CAS token without sending', () => {
+  const span = { draftRev: 7, start: 0, end: 0 };
+  let inserted = 0;
+  const actions = {
+    captureInsertion: () => span,
+    insertText(text, actual) { assert.equal(actual, span); assert.equal(text, 'Test it'); inserted++; return true; },
+    send() { assert.fail('must never send'); },
+  };
+  assert.equal(insertDraft(actions, 7, 'Test it'), true);
+  assert.equal(inserted, 1);
 });
-const { createAutomaticPredictionGate } = bundle.factory(name => {
-  assert.equal(name, 'react');
-  return {};
+test('changed draft, selection, or failed CAS preserve editor', () => {
+  for (const span of [{ draftRev: 8, start: 0, end: 0 }, { draftRev: 7, start: 1, end: 1 }, { draftRev: 7, start: 0, end: 1 }]) {
+    assert.equal(insertDraft({ captureInsertion: () => span, insertText() { assert.fail('stale input'); } }, 7, 'draft'), false);
+  }
+  assert.equal(insertDraft({ captureInsertion: () => ({ draftRev: 7, start: 0, end: 0 }), insertText: () => false }, 7, 'draft'), false);
 });
-const snapshot = (revision, changes = {}) => ({
-  revision, ready: true, running: false, openState: 'open', enabled: true, ...changes,
+test('client keeps command reads read-only and manual prompt is bound to a click', () => {
+  assert.doesNotMatch(source, /action:\s*['"](?:generate|submit)['"]/);
+  assert.doesNotMatch(source, /createAutomaticPredictionGate|onClick:\s*refresh/);
+  assert.match(source, /key: props.sessionId/);
+  assert.match(source, /controller\.abort\(\)/);
 });
 
-test('opening, hydrating and rereading completed history never authorizes a prediction', () => {
-  const gate = createAutomaticPredictionGate();
-  for (const state of [
-    snapshot(undefined, { openState: 'cold' }),
-    snapshot(100, { openState: 'loading' }),
-    snapshot(100, { enabled: null }),
-    snapshot(100), snapshot(101), snapshot(101),
-  ]) {
-    gate.observe(state);
-    assert.equal(gate.allows(state.revision), false);
+function promptSession() {
+  const snapshot = { running: false, removed: false, openState: 'open', subagent: null, pendingSubmissions: [], awaitingFirstTurn: false };
+  let resolve, reject, retire, abandons = 0;
+  const sent = [];
+  const session = {
+    getSnapshot: () => snapshot,
+    beginSubmission(input) {
+      assert.equal(input.mode, 'queue'); assert.equal(input.attachments.length, 0);
+      retire = input.onRetire;
+      return { requestId: 'request-1', abandon() { abandons++; retire({ reason: 'failed' }); } };
+    },
+    prompt(content, mode, signal, requestId) {
+      sent.push({ content, mode, signal, requestId });
+      return new Promise((yes, no) => { resolve = yes; reject = no; });
+    },
+  };
+  return { session, snapshot, sent, finish: value => resolve(value), fail: error => reject(error), retire: () => retire({ reason: 'observed' }), abandons: () => abandons };
+}
+test('manual request sends only explicit visible text and never reads or changes the draft', async () => {
+  const fixture = promptSession();
+  const requester = createSuggestionRequester(() => ({ session: fixture.session }));
+  const promise = requester.request('a', 'Please propose drafts only.', () => true);
+  assert.equal(fixture.sent.length, 1);
+  const sent = fixture.sent[0];
+  assert.equal(sent.content.length, 1); assert.equal(sent.content[0].text, 'Please propose drafts only.');
+  assert.equal(sent.content[0].type, 'text'); assert.equal(sent.mode, 'queue'); assert.equal(sent.requestId, 'request-1');
+  fixture.finish({ ok: true, value: { accepted: true } });
+  assert.equal(await promise, true);
+  assert.equal(requester.isPending('a'), true);
+  fixture.retire();
+  assert.equal(requester.isPending('a'), false);
+});
+test('both echo/receipt orderings release lock, including a completed turn with no drafts', async () => {
+  for (const early of [true, false]) {
+    const f = promptSession(); const r = createSuggestionRequester(() => ({ session: f.session }));
+    const promise = r.request('a', 'Only drafts', () => true);
+    if (early) f.retire();
+    assert.equal(r.isPending('a'), true);
+    f.finish({ ok: true, value: { accepted: true } }); await promise;
+    if (!early) { assert.equal(r.isPending('a'), true); f.retire(); }
+    assert.equal(r.isPending('a'), false);
   }
 });
-
-test('running metadata during history loading is not a live reply observation', () => {
-  const gate = createAutomaticPredictionGate();
-  gate.observe(snapshot(10, { openState: 'loading', running: true, ready: false }));
-  gate.observe(snapshot(20));
-  assert.equal(gate.allows(20), false);
+test('same-session duplicate and returning views share lock; other sessions stay independent', async () => {
+  const a = promptSession(), b = promptSession();
+  const r = createSuggestionRequester(id => ({ session: (id === 'a' ? a : b).session }));
+  const first = r.request('a', 'A', () => true);
+  const second = r.request('b', 'B', () => true);
+  assert.equal(await r.request('a', 'A again after switching back', () => true), false);
+  assert.equal(a.sent.length, 1); assert.equal(b.sent.length, 1);
+  a.finish({ ok: true, value: { accepted: true } }); a.retire(); await first;
+  assert.equal(r.isPending('b'), true);
+  b.finish({ ok: true, value: { accepted: true } }); b.retire(); await second;
 });
-
-test('a live reply arms only its later completed revision, even when readiness arrives first', () => {
-  const gate = createAutomaticPredictionGate();
-  gate.observe(snapshot(10));
-  gate.observe(snapshot(10, { running: true }));
-  gate.observe(snapshot(11, { running: true, ready: false }));
-  gate.observe(snapshot(20, { running: true }));
-  assert.equal(gate.allows(20), false);
-  gate.observe(snapshot(20));
-  assert.equal(gate.allows(20), true);
-  assert.equal(gate.allows(10), false);
-  gate.observe(snapshot(21, { ready: false }));
-  assert.equal(gate.allows(21), false);
+test('click-time snapshot and access/switch gates prevent stale rendered button from sending', async () => {
+  for (const change of [{ running: true }, { removed: true }, { openState: 'error' }, { subagent: {} }, { pendingSubmissions: [{}] }, { awaitingFirstTurn: true }]) {
+    const f = promptSession(); const r = createSuggestionRequester(() => ({ session: f.session }));
+    Object.assign(f.snapshot, change);
+    assert.equal(await r.request('a', 'Drafts', () => true), false); assert.equal(f.sent.length, 0);
+  }
+  const f = promptSession(); const r = createSuggestionRequester(() => ({ session: f.session }));
+  assert.equal(await r.request('a', 'Drafts', () => false), false); assert.equal(f.sent.length, 0);
 });
-
-test('completion also works when running becomes false before the projection arrives', () => {
-  const gate = createAutomaticPredictionGate();
-  gate.observe(snapshot(10, { running: true, ready: false }));
-  gate.observe(snapshot(10, { ready: false }));
-  assert.equal(gate.allows(10), false);
-  gate.observe(snapshot(20));
-  assert.equal(gate.allows(20), true);
+test('remote failures and thrown exceptions release echo and lock without automatic retries', async () => {
+  for (const throws of [false, true]) {
+    const f = promptSession(); const r = createSuggestionRequester(() => ({ session: f.session }));
+    const promise = r.request('a', 'Drafts', () => true);
+    if (throws) f.fail(new Error('offline')); else f.finish({ ok: false, error: new Error('denied') });
+    await assert.rejects(promise, throws ? /offline/ : /denied/);
+    assert.equal(r.isPending('a'), false); assert.equal(f.abandons(), 1); assert.equal(f.sent.length, 1);
+  }
 });
-
-test('unchanged historical readiness cannot satisfy an observed running flag', () => {
-  const gate = createAutomaticPredictionGate();
-  gate.observe(snapshot(20, { running: true }));
-  gate.observe(snapshot(20));
-  assert.equal(gate.allows(20), false);
-});
-
-test('a session remount or reopen never inherits a previous live reply observation', () => {
-  const oldMount = createAutomaticPredictionGate();
-  oldMount.observe(snapshot(10, { running: true, ready: false }));
-  const newMount = createAutomaticPredictionGate();
-  newMount.observe(snapshot(20));
-  assert.equal(newMount.allows(20), false);
-  oldMount.observe(snapshot(10, { openState: 'loading', ready: false }));
-  oldMount.observe(snapshot(20));
-  assert.equal(oldMount.allows(20), false);
-});
-
-test('disabling clears the gate and enabling on an idle conversation does not predict', () => {
-  const gate = createAutomaticPredictionGate();
-  gate.observe(snapshot(10, { running: true, ready: false }));
-  gate.observe(snapshot(11, { running: true, ready: false, enabled: false }));
-  gate.observe(snapshot(20, { enabled: false }));
-  gate.observe(snapshot(20));
-  assert.equal(gate.allows(20), false);
-  gate.observe(snapshot(21, { running: true, ready: false }));
-  gate.observe(snapshot(30));
-  assert.equal(gate.allows(30), true);
-});
-
-test('failed replies and backward replay revisions never authorize predictions', () => {
-  const gate = createAutomaticPredictionGate();
-  gate.observe(snapshot(10, { running: true, ready: false }));
-  gate.observe(snapshot(20, { ready: false }));
-  assert.equal(gate.allows(20), false);
-  gate.observe(snapshot(5));
-  gate.observe(snapshot(20));
-  assert.equal(gate.allows(20), false);
+test('plugin disposal aborts admission and cannot send another request', async () => {
+  const f = promptSession(); const r = createSuggestionRequester(() => ({ session: f.session }));
+  const promise = r.request('a', 'Drafts', () => true);
+  r.dispose(); assert.equal(f.sent[0].signal.aborted, true);
+  f.fail(new Error('aborted')); await assert.rejects(promise, /aborted/);
+  assert.equal(await r.request('a', 'Again', () => true), false);
 });

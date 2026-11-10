@@ -1,105 +1,121 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { initialState, foldContext, boundedTranscript, parseSuggestions, PredictionRuntime } from '../core.js';
+import { initialState, foldContext, validateInput, PredictionRuntime } from '../core.js';
+const drafts = ['运行测试并解释结果。', '介绍下一步的取舍。'];
+const event = (type, seq, data, extra = {}) => ({ type, seq, data, ...extra });
+const start = (seq = 0, turn = 1) => event('turn/start', seq, { turn });
+const call = (seq = 1, turn = 1, callId = 'call1', suggestions = drafts) => event('tool/call', seq, { turn, step: 1, name: 'predicted_messages', callId, arguments: JSON.stringify({ action: 'submit', suggestions }) });
+const value = (changes = {}) => ({ enabled: true, revision: 1, suggestions: drafts, status: 'submitted', model: '', sessionId: 'a', turn: 1, callId: 'call1', ...changes });
+const result = (seq = 2, changes = {}, data = {}) => event('tool/result', seq, { turn: 1, step: 1, message: { role: 'tool', source: { kind: 'tool', callId: 'call1' }, toolCallId: 'call1', isError: false, content: [{ type: 'text', text: JSON.stringify(value(changes)) }] }, ...data });
+const end = (seq = 3, kind = 'completed', turn = 1) => event('turn/end', seq, { turn, reason: { kind } });
+const fold = (events, id = 'a', inherited = 0) => events.reduce(foldContext, initialState({ id }, inherited));
+const complete = () => fold([start(), call(), result(), end()]);
 
-const user = (seq, text) => ({ type: 'user/message', seq, data: { role: 'user', source: { kind: 'user' }, content: [{ type: 'text', text }] } });
-const assistant = (seq, text, turn = 1) => ({ type: 'assistant/message', seq, data: { turn, message: { role: 'assistant', content: [{ type: 'reasoning', text: 'private reasoning' }, { type: 'text', text }] } } });
-const end = (seq, kind = 'completed') => ({ type: 'turn/end', seq, data: { turn: 1, reason: { kind } } });
-const readyState = () => [user(1, '帮我优化代码'), assistant(2, '已优化，接下来可以运行测试。'), end(3)].reduce(foldContext, initialState());
-function fixture(stream) {
-  let state = readyState();
-  let calls = 0;
-  const session = { id: 'test-session' };
-  const llm = { async prepareCall(config, signal, configure) {
-    calls++;
-    return { config: { ...config, ...configure({}, { reasoning: { efforts: [{ id: 'low' }] } }) }, stream: options => stream ? stream(options) : (async function* () { yield { type: 'text-delta', text: '{"suggestions":["运行一下测试。"]}' }; yield { type: 'finish', reason: { kind: 'stop' } }; })() };
-  } };
-  const runtime = new PredictionRuntime({ llm, readState: () => state, selection: () => ({ provider: 'p', model: 'm' }), saveEnabled: async value => { runtime.config.enabled = value; } });
-  return { runtime, session, calls: () => calls, setState: next => { state = next; } };
-}
-
-test('projection accepts actual human text, ignores tool data and reasoning, waits for completed turn', () => {
-  let s = foldContext(initialState(), user(1, '测试一下'));
-  const tool = { type: 'tool/result', seq: 2, data: { text: 'secret output' } };
-  assert.equal(foldContext(s, tool), s);
-  s = foldContext(s, assistant(3, '进行中'));
-  s = foldContext(s, assistant(4, '已完成'));
-  assert.equal(s.messages.length, 2);
-  assert.equal(s.messages[1].text, '已完成');
-  assert.equal(s.view.ready, false);
-  assert.equal(foldContext(s, end(5, 'aborted')).view.ready, false);
-  assert.equal(foldContext(s, end(5)).view.ready, true);
-  assert.equal(foldContext(s, { type: 'model/selection', seq: 6 }).view.ready, false);
+test('successful correlated results remain hidden until completed turn', () => {
+  const state = fold([start(), call(), result()]);
+  assert.deepEqual(state.view.suggestions, []);
+  assert.deepEqual(state.pending, drafts);
+  assert.deepEqual(foldContext(state, end()).view.suggestions, drafts);
+  assert.deepEqual(state.view.suggestions, [], 'fold is immutable');
 });
-
-test('surface replacement invalidates and removes superseded source text', () => {
-  const s = foldContext(readyState(), { type: 'developer/message', seq: 4, surfaceOp: { op: 'replace', startSeq: 1, endSeq: 3 } });
-  assert.deepEqual(s.messages, []);
-  assert.equal(s.view.ready, false);
+test('parameters alone, arbitrary JSON, unrelated tools and wrong sources never publish', () => {
+  assert.deepEqual(fold([start(), call(), end()]).view.suggestions, []);
+  assert.deepEqual(fold([start(), result(), end()]).view.suggestions, []);
+  const other = call(); other.data.name = 'other_tool';
+  assert.deepEqual(fold([start(), other, result(), end()]).view.suggestions, []);
+  for (const changes of [{ sessionId: 'b' }, { turn: 2 }, { callId: 'wrong' }, { enabled: false }, { status: 'ready' }, { suggestions: ['invented'] }]) {
+    assert.deepEqual(fold([start(), call(), result(2, changes), end()]).view.suggestions, []);
+  }
+  for (const mutate of [r => r.data.message.isError = true, r => r.data.error = { code: 'FAILED' }, r => r.data.message.source.callId = 'other', r => r.data.step = 2, r => r.data.turn = 2, r => r.data.message.role = 'assistant']) {
+    const r = result(); mutate(r);
+    assert.deepEqual(fold([start(), call(), r, end()]).view.suggestions, []);
+  }
 });
-
-test('context budget prioritizes recent conversation and bounds retained history', () => {
-  const rows = [{ role: 'user', text: '12345' }, { role: 'assistant', text: '67890' }];
-  assert.deepEqual(boundedTranscript(rows, 7), [{ role: 'user', text: '45' }, { role: 'assistant', text: '67890' }]);
-  let s = initialState();
-  for (let i = 0; i < 20; i++) s = foldContext(s, user(i, 'a'.repeat(8000)));
-  assert.equal(s.messages.length, 10);
-  assert.ok(s.messages.every(m => m.text.length <= 6000));
+test('nonobject and malformed JSON tool results never throw or publish', () => {
+  for (const text of ['null', '42', '"text"', '[]', '[{}]', '{}', '{']) {
+    const r = result(); r.data.message.content[0].text = text;
+    assert.deepEqual(fold([start(), call(), r, end()]).view.suggestions, []);
+  }
 });
-
-test('model output is strict JSON with deduplicated bounded plain drafts', () => {
-  assert.deepEqual(parseSuggestions('```json\n{"suggestions":["  帮我测试。  ","帮我测试。",42,"/danger","解释一下。"]}\n```'), ['帮我测试。', '解释一下。']);
-  assert.deepEqual(parseSuggestions('{"suggestions":[]}'), []);
-  assert.throws(() => parseSuggestions('Sure, here is a suggestion'));
-  assert.throws(() => parseSuggestions('{"foo":[]}'));
+test('surface replacement rejects further submissions until a new turn starts', async () => {
+  let state = fold([start(), call(), result(), event('developer/message', 3, {}, { surfaceOp: { op: 'replace', startSeq: 99, endSeq: 1 } }), call(4)]);
+  const runtime = new PredictionRuntime({ readState: () => state });
+  await assert.rejects(runtime.operate({ id: 'a' }, { action: 'submit', suggestions: drafts }, undefined, 'call1'));
+  state = foldContext(state, start(5, 2));
+  state = foldContext(state, call(6, 2));
+  assert.equal((await runtime.operate({ id: 'a' }, { action: 'submit', suggestions: drafts }, undefined, 'call1')).status, 'submitted');
 });
-
-test('cached generation and disabled switch avoid repeated provider requests', async () => {
-  const f = fixture();
-  const first = await f.runtime.operate(f.session, { action: 'generate' });
-  assert.equal(first.status, 'ready');
-  assert.deepEqual(first.suggestions, ['运行一下测试。']);
-  assert.deepEqual(await f.runtime.operate(f.session, { action: 'generate' }), first);
-  assert.equal(f.calls(), 1);
-  await f.runtime.operate(f.session, { action: 'configure', enabled: false });
-  assert.equal((await f.runtime.operate(f.session, { action: 'generate' })).status, 'disabled');
-  assert.equal(f.calls(), 1);
-  await f.runtime.dispose();
+test('all noncompleted turn outcomes discard suggestions', () => {
+  for (const kind of ['aborted', 'error', 'blocked', 'max-tokens', 'interrupted', 'forked']) {
+    const state = fold([start(), call(), result(), end(3, kind)]);
+    assert.equal(state.view.ready, false);
+    assert.deepEqual(state.pending, []);
+    assert.deepEqual(state.view.suggestions, []);
+  }
 });
-
-test('new conversation revision makes a late provider result stale', async () => {
-  let release;
-  const gate = new Promise(resolve => { release = resolve; });
-  const f = fixture(async function* () { await gate; yield { type: 'text-delta', text: '{"suggestions":["旧预测"]}' }; yield { type: 'finish', reason: { kind: 'stop' } }; });
-  const request = f.runtime.operate(f.session, { action: 'generate' });
-  assert.equal((await f.runtime.operate(f.session, { action: 'generate' })).status, 'busy');
-  f.setState(foldContext(readyState(), user(10, '我换个问题')));
-  release();
-  const result = await request;
-  assert.equal(result.status, 'stale');
-  assert.deepEqual(result.suggestions, []);
-  assert.equal(f.calls(), 1);
-  await f.runtime.dispose();
+test('new user input, new turn, inbox mutation and surface rewrite clear immediately', () => {
+  for (const e of [start(4, 2), event('user/message', 4, { role: 'user' }), event('agent/inbox/spliced', 4, {}), event('model/selection', 4, {}), event('developer/message', 4, {}, { surfaceOp: { op: 'replace', startSeq: 99, endSeq: 1 } })]) {
+    assert.deepEqual(foldContext(complete(), e).view.suggestions, []);
+  }
+  const events = [start(), call(), event('user/message', 2, { role: 'user' }), result(3), end(4)];
+  assert.deepEqual(fold(events).view.suggestions, []);
 });
-
-test('invalidation aborts pending prediction and prevents cache publication', async () => {
-  const f = fixture(async function* ({ signal }) {
-    await new Promise((_, reject) => {
-      if (signal.aborted) reject(signal.reason);
-      else signal.addEventListener('abort', () => reject(signal.reason), { once: true });
-    });
-  });
-  const request = f.runtime.operate(f.session, { action: 'generate' });
-  const rejected = assert.rejects(request, /对话已更新/);
-  f.runtime.invalidate(f.session);
-  await rejected;
-  assert.deepEqual(f.runtime.status(f.session).suggestions, []);
-  await f.runtime.dispose();
+test('late results and old turn ends cannot republish in another turn', () => {
+  const state = fold([start(), call(), start(2, 2), result(3), end(4), end(5, 'completed', 2)]);
+  assert.deepEqual(state.view.suggestions, []);
 });
-
-test('partial and failed provider output is never treated as a usable suggestion', async () => {
-  const f = fixture(async function* () { yield { type: 'text-delta', text: '{"suggestions":["old"]}' }; yield { type: 'finish', reason: { kind: 'error', failure: { message: 'quota failure' } } }; });
-  await assert.rejects(f.runtime.operate(f.session, { action: 'generate' }), /quota failure/);
-  assert.deepEqual(f.runtime.status(f.session).suggestions, []);
-  await f.runtime.dispose();
+test('fork inheritance is ignored, own new turn works, same-session replay is deterministic', () => {
+  const log = [start(), call(), result(), end()];
+  assert.deepEqual(fold(log), complete());
+  assert.deepEqual(fold(log, 'child', 4).view.suggestions, []);
+  const own = [start(4, 2), call(5, 2), result(6, { sessionId: 'child', turn: 2 }, { turn: 2 }), end(7, 'completed', 2)];
+  assert.deepEqual(fold([...log, ...own], 'child', 4).view.suggestions, drafts);
+  assert.deepEqual(fold(log, 'child').view.suggestions, [], 'session identity alone also rejects copied results');
+});
+test('latest successful submission can clear or replace suggestions', () => {
+  const emptyCall = call(3, 1, 'clear', []);
+  const emptyResult = result(4, { callId: 'clear', suggestions: [] });
+  emptyResult.data.message.toolCallId = 'clear'; emptyResult.data.message.source.callId = 'clear';
+  assert.deepEqual(fold([start(), call(), result(), emptyCall, emptyResult, end(5)]).view.suggestions, []);
+});
+test('input rejects excess, unknown fields, duplicate, slash and control text', () => {
+  assert.deepEqual(validateInput({ action: 'submit', suggestions: [] }).suggestions, []);
+  assert.equal(validateInput({ action: 'submit', suggestions: ['😀'.repeat(160)] }).suggestions.length, 1);
+  for (const input of [null, [], { unknown: 1 }, { action: 'unknown' }, { action: 'configure' }, { action: 'status', suggestions: [] }, ...[undefined, ['a','b','c'], [''], ['a','a'], ['/send'], ['a\nb'], ['😀'.repeat(161)], [2]].map(suggestions => ({ action: 'submit', suggestions }))]) {
+    assert.throws(() => validateInput(input));
+  }
+});
+test('status and legacy generate are read-only with no LLM, network or timers', async () => {
+  const runtime = new PredictionRuntime({ readState: () => complete() });
+  const session = { id: 'a' };
+  for (const input of [{}, { action: 'status' }, { action: 'generate' }, { action: 'generate', refresh: true }]) {
+    assert.deepEqual((await runtime.operate(session, input)).suggestions, drafts);
+  }
+  assert.deepEqual(runtime.status({ id: 'b' }).suggestions, []);
+  runtime.dispose();
+  await assert.rejects(runtime.operate(session));
+});
+test('submission requires exact live call; result is not published by execute', async () => {
+  let state = fold([start(), call()]);
+  const runtime = new PredictionRuntime({ readState: () => state });
+  const args = { action: 'submit', suggestions: drafts };
+  await assert.rejects(runtime.operate({ id: 'a' }, args));
+  await assert.rejects(runtime.operate({ id: 'a' }, args, undefined, 'wrong'));
+  const submitted = await runtime.operate({ id: 'a' }, args, undefined, 'call1');
+  assert.equal(submitted.status, 'submitted');
+  assert.deepEqual(runtime.status({ id: 'a' }).suggestions, []);
+  state = foldContext(state, end());
+  await assert.rejects(runtime.operate({ id: 'a' }, args, undefined, 'call1'));
+});
+test('switch saves, suppresses disabled submissions, and abort/errors do not change it', async () => {
+  const saved = [];
+  const runtime = new PredictionRuntime({ readState: () => complete(), saveEnabled: async value => saved.push(value) });
+  assert.equal((await runtime.operate({ id: 'a' }, { action: 'configure', enabled: false })).status, 'disabled');
+  assert.deepEqual(saved, [false]);
+  assert.deepEqual(runtime.status({ id: 'a' }).suggestions, []);
+  const controller = new AbortController(); controller.abort(new Error('stopped'));
+  await assert.rejects(runtime.operate({ id: 'a' }, { action: 'configure', enabled: true }, controller.signal), /stopped/);
+  assert.deepEqual(saved, [false]);
+  const disabled = new PredictionRuntime({ config: { enabled: false }, readState: () => fold([start(), call()]) });
+  assert.equal((await disabled.operate({ id: 'a' }, { action: 'submit', suggestions: drafts }, undefined, 'call1')).status, 'disabled');
 });

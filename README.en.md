@@ -1,98 +1,73 @@
 # DSH predicted messages
 
-[简体中文](README.md) · [Download](https://github.com/shine1973/dsh-predicted-messages/releases/tag/v0.1.6) · [Issues](https://github.com/shine1973/dsh-predicted-messages/issues)
+[简体中文](README.md) · [Issues](https://github.com/shine1973/dsh-predicted-messages/issues)
 
-A community plugin for DeepSeek Harness (DSH) that predicts your next message from the conversation. Suggestions appear above the composer; selecting one fills an editable draft and never sends it automatically.
+Display optional next-message drafts submitted by the conversation model above the DeepSeek Harness composer. Selecting one fills an editable draft and never sends it.
 
-## Features
+> These changes are available on `main`, but no new Release archive has been published. The package version remains 0.1.6; the published v0.1.6 still makes separate prediction requests and does not contain model-submitted suggestions or the manual button. See the [changelog](CHANGELOG.md).
 
-- Up to two suggestions after a new reply completes in the currently viewed conversation, using its model.
-- Opening or revisiting completed history only reads cached results; it never automatically spends model quota.
-- Suggestions share the composer's width and side clearance.
-- Refresh or hide suggestions for the current round.
-- Cancel stale requests when you type, switch sessions, or disable predictions.
-- A persistent **Show predicted messages** switch under **Plugins → Predicted messages**, with an explicit **Save** action.
-- No empty conversation bar when disabled, while typing, or when there are no suggestions.
-- English and Chinese labels, native DSH theme colors, and no separate API key.
+## Install the main branch
 
-This independent plugin is not affiliated with OpenAI Codex.
-
-## Install
-
-Requires DSH with a working model provider. Developed and used with **DSH 0.2.2-rc.1 on macOS Desktop**. Other platforms have not received full UI validation. The declared DSH range is `>=0.2.2-rc.1 <0.3.0`; API changes may require a plugin update.
-
-In **Plugins → Add plugin**, paste the release archive URL:
+In DSH **Plugins → Add plugin**, use:
 
 ```text
-https://github.com/shine1973/dsh-predicted-messages/releases/download/v0.1.6/dsh-predicted-messages-0.1.6.tgz
+git+https://github.com/shine1973/dsh-predicted-messages.git#main
 ```
 
-Alternatively, with Git installed:
+Follow the plugin manager's reload or restart instructions. Do not enable the public package alongside the local `@local/dsh-predicted-messages` development package, which would register the same functionality twice.
 
-```text
-git+https://github.com/shine1973/dsh-predicted-messages.git#v0.1.6
+## Use and cost
+
+Near the end of a task reply, the model may call `predicted_messages` with zero to two short drafts. Suggestions appear only after a successfully completed turn, while the composer is empty and has no attachments. A persistent **Generate suggestions** button remains beside the composer, even without suggestions. **Hide this round** dismisses the suggestions.
+
+Clicking **Generate suggestions** sends a visible user request to the current conversation model, asking it only to submit drafts rather than execute the proposed tasks or change settings. This starts a conversation turn and uses tokens. Existing composer text and attachments remain untouched. Nothing is sent automatically. The button is disabled while the conversation or an admission request is pending, when the display switch is off, without prompt access, or inside a subagent session (manual requests currently support ordinary sessions only). A completed turn without suggestions can be retried explicitly; there is no automatic retry. The saved display switch remains under **Plugins → Predicted messages → Show predicted messages**.
+
+Insertion uses `captureInsertion` and `insertText` CAS to preserve a changed draft. There is no automatic send and no refresh-generation button. Opening history or switching sessions makes no prediction request. Same-session restoration may show persisted suggestions from its last completed turn; a fork never inherits the parent's suggestions as its own.
+
+The plugin makes no separate LLM request, reads no billion-context summaries, and does not use SessionManager. Tool instructions, calls, results and the main model's continuation can still add conversation tokens and latency. This is not zero-cost. Tool instructions prohibit invented consent or authorization; format validation cannot establish the truth or intent of natural-language drafts, so users should review them.
+
+## Tool contract
+
+```json
+{"action":"submit","suggestions":["Run the tests and explain the results.","Explain the next step's tradeoffs."]}
 ```
 
-You can also ask the DSH agent to install either address through `plugin_manager` with `action: install_bundle`. Follow any restart instruction returned by DSH. Runtime dependencies are downloaded during installation; the archive contains no `node_modules` or install scripts. This release is distributed through GitHub and does not require an npm account.
+- `submit`: current-turn direct model tool calls only; zero to two distinct plain-text drafts, at most 160 Unicode code points each. Nonempty entries are required; control characters, slash commands and unknown fields are rejected. An empty array clears pending suggestions.
+- `status` (default): read existing suggestions.
+- `configure`: requires boolean `enabled`; change the profile display preference only when the user requests it.
+- Legacy `generate` and `refresh` remain accepted but only read state, with no request or regeneration.
+- `/predicted-messages` supports read/configure operations and rejects unbound `submit` calls.
 
-If you installed the earlier `@local/dsh-predicted-messages` development package, disable or remove it before installing the public package to avoid duplicate tool registration.
+Only `enabled` has an effect, defaulting to true. Legacy `provider`, `model`, `contextChars`, `summaryChars`, `totalChars`, `summaryOrigin` and `timeoutMs` remain accepted and ignored for migration compatibility.
 
-## Use
+## Durable binding and limits
 
-After a reply finishes, leave the composer empty. Select a suggestion, edit it, and send when ready. **Refresh** generates another result; **Hide this round** dismisses the current suggestions. Change the automatic prediction preference under **Plugins → Predicted messages → Show predicted messages**, then click **Save**.
+Tool execution has no turn field. The projection correlates the actual `tool/call` turn/step/callId with a successful `tool/result`, including tool provenance and matching sessionId/turn/callId/drafts in the receipt. Assistant JSON or tool arguments alone cannot publish suggestions. Publication requires `turn/end.reason.kind === 'completed'`.
 
-No automatic prediction starts while the assistant is replying or the composer contains text or attachments. An empty result is valid when the model has no useful continuation. Provider and parsing errors are shown instead of fabricated fallback suggestions.
+New user messages, inbox mutations, new turns, model changes and surface replacements clear old suggestions. Aborted, failed, blocked, max-token, interrupted and forked endings remain hidden. Surface replacements conservatively clear state rather than interpreting endpoints as numeric ranges; useful suggestions may consequently be omitted for that turn. Projection stateVersion 3 refolds old checkpoints and ignores the fork-inherited prefix. No custom session events are written.
 
-## Model usage and data
+Only the standard durable direct `tool/call` / `tool/result` path is supported. PTC sub-dispatch events have not been verified; submissions without a matching direct call fail explicitly. There is no fallback model request when the main model omits a submission.
 
-A prediction makes an additional request through your configured DSH provider and consumes model quota. It uses the model's lowest advertised reasoning effort, a 30-second default timeout, per-round caching, and a two-second manual refresh cooldown.
+## Develop and installation handoff
 
-Recent context contains actual user text and the last retained assistant text per turn: at most ten messages, each capped at 6,000 characters, within a default 12,000 UTF-16-unit recent-text budget. Reasoning text, tool results, images, and the full system prompt are excluded. Selected text goes to your configured model provider through DSH. The plugin adds no analytics service and does not read or store API keys.
-
-Predictions are editable suggestions and may be wrong. They do not authorize or execute actions.
-
-Existing billion-context summaries are read using exact-session loopback HTTP GET detail (tested 0.1.213 internal Web API), without extra summarization calls or latest-session fallback. Active nested blocks are deduplicated, newest first; this is not relevance search. Summary claims are historical and yield to recent conversation. Shape errors, unavailable service, 2 MiB response limit or 1.5-second timeout fall back to recent-only input. Origin discovery reads billion-context/proxy-origin under XDG_STATE_HOME (default ~/.local/state); an explicit loopback HTTP origin is supported.
-
-Budgets count UTF-16 units, not tokens: recent text 12,000, summaries 4,000, actual serialized user JSON 16,000 including escaping/keys. Fixed system prompt and transport envelope are excluded. Recent text has priority but may itself be trimmed for escaping overhead. Zero summaryChars disables reads. History opening, status and cache hits do not fetch summaries.
-
-## Configuration
-
-The preference applies to all conversations in the current DSH profile and is saved through DSH's configuration service. Advanced fields are managed by the plugin configuration system:
-
-| Field | Default | Meaning |
-|---|---|---|
-| `enabled` | `true` | Automatic predictions |
-| `provider` | empty | Override provider; otherwise follow the session |
-| `model` | empty | Override model; must accompany `provider` |
-| `contextChars` | `12000` | Recent text limit, 1,000–20,000 |
-| `summaryChars` | `4000` | Summary limit, 0–20,000; zero disables reads |
-| `totalChars` | `16000` | Serialized user input limit, 1,000–40,000; at least each individual budget |
-| `summaryOrigin` | empty | Auto-discover; loopback HTTP origin only |
-| `timeoutMs` | `30000` | Timeout in milliseconds, 5,000–60,000 |
-
-The public package is `dsh-predicted-messages`. Its configuration row retains the ID `local-predicted-messages` for development-version continuity. The plugin does not rewrite profile files directly.
-
-The `predicted_messages` agent tool and `/predicted-messages` command accept `status`, `generate` (optional `refresh: true`), and `configure` (required `enabled` boolean). Generation returns `busy` without contacting a model when the conversation has not completed a reply.
-
-## Develop
-
-Requires Node.js 22 or later.
-
-Cordis is an optional peer supplied by the DSH host, not a private production dependency. `npm ci` installs it as a development dependency for local checks; production loading uses DSH's runtime resolver. Do not move Cordis back into `dependencies` or bundle the development copy.
+Requires Node.js 22+. Declared DSH range: `>=0.2.2-rc.1 <0.3.0`. All 31 regression tests pass, covering durable binding, lifecycle and component interactions. Local Host loading, real model submission and completed-turn persistence were verified. A user clicked the manual button and its visible request successfully triggered the submission tool. Final browser display and draft insertion have not received visual acceptance; automated tests do not establish compatibility across platforms.
 
 ```sh
-git clone https://github.com/shine1973/dsh-predicted-messages.git
-cd dsh-predicted-messages
 npm ci --ignore-scripts
 npm run check
 npm test
 npm pack --ignore-scripts
 ```
 
-Install the local directory through DSH's plugin manager after installing dependencies. Local installs link the directory, so keep it in place. Follow the manager's reload or restart guidance when updating code.
+Cordis remains a host-provided optional peer. There is no source build step; the client is a lazy module. Before installing, list the exact installed bundle with DSH `plugin_manager`, then install the reviewed local package/directory and follow its reload/restart guidance. Installation changes the local profile and is a separate handoff step. Refresh and verify the existing GUI; do not start a replacement server.
 
-Tests cover context bounds, caching, cancellation, stale results, and provider failures. CI checks Node.js 22 and 24; it does not establish UI compatibility with every DSH release or platform.
+Acceptance: inspect the new schema; submit through a real tool call and complete the turn; verify two-draft limits and fill-only behavior, new-turn/cancellation/switch/fork isolation, settings, and legacy generate making no model request.
 
-Report issues with your DSH version, plugin version, model provider, and reproduction steps. Remove credentials and private conversations before sharing logs or screenshots.
+- [index.js](index.js): Host registration, settings, command, tool and projection schemas.
+- [core.js](core.js): pure `validateInput(input = {})`, `initialState(header = {}, inheritedEventCount = 0)`, `foldContext(state, event)` and the read/configure runtime.
+- [client.js](client.js): composer dock, CAS insertion and settings.
+- [test/core.test.js](test/core.test.js): durable-result and lifecycle regressions.
+
+The previous selector experiment, its six files, complete git diff, SHA256 manifest and old tests are preserved outside the repository in `../dsh-predicted-messages-selector-backup-20261110/`. The summary reader and its tests are removed from the new architecture.
 
 [MIT License](LICENSE) · [Changelog](CHANGELOG.md)
