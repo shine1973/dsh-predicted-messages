@@ -63,6 +63,8 @@ window.__ModuleLoader__.load({
     const CSS = `
 .dsh-predicted-messages{box-sizing:border-box;width:100%;min-width:0;max-width:100%;color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;line-height:1.5;padding:0 2px;margin:0 0 8px}
 .dsh-predicted-messages *{box-sizing:border-box}
+.dsh-predicted-messages__frame{box-sizing:border-box;width:100%;padding:0 var(--dsh-composer-side-clearance)}
+.dsh-predicted-messages--dock{max-width:var(--dsh-composer-card-max-width);padding:0;margin:0 auto 8px}
 .dsh-predicted-messages__bar{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;min-height:26px}
 .dsh-predicted-messages__title{color:var(--dsw-alias-label-secondary);font-weight:500;white-space:nowrap}
 .dsh-predicted-messages button{font:inherit;cursor:pointer;color:inherit;-webkit-tap-highlight-color:transparent}
@@ -117,7 +119,37 @@ window.__ModuleLoader__.load({
       };
     }
 
+    // This gate belongs to one mounted conversation, never its restored history.
+    // Only a running reply observed while the session is open can arm automation.
+    function createAutomaticPredictionGate() {
+      let activeRevision = null;
+      let automaticRevision = null;
+      let lastRevision = null;
+      return {
+        observe({ revision, ready, running, openState, enabled }) {
+          if (openState !== 'open' || !Number.isSafeInteger(revision) || revision < 0
+            || enabled === false || (lastRevision !== null && revision < lastRevision)) {
+            activeRevision = null;
+            automaticRevision = null;
+            lastRevision = Number.isSafeInteger(revision) ? revision : null;
+            return;
+          }
+          lastRevision = revision;
+          if (running) {
+            // Keep the start watermark: ready may arrive before running=false.
+            if (activeRevision === null) activeRevision = revision;
+            automaticRevision = null;
+          } else if (ready && activeRevision !== null && revision > activeRevision) {
+            automaticRevision = revision;
+            activeRevision = null;
+          }
+        },
+        allows(revision) { return automaticRevision !== null && automaticRevision === revision; },
+      };
+    }
+
     return {
+      createAutomaticPredictionGate,
       inject: ['slots', 'sessions', 'locale'],
       apply(ctx) {
         ctx.effect(() => ctx.locale.register(NS, { en, zh }), 'predicted-messages: dictionaries');
@@ -169,6 +201,7 @@ window.__ModuleLoader__.load({
           const revision = props.useProjection(PROJECTION, value => value?.revision);
           const ready = props.useProjection(PROJECTION, value => value?.ready === true);
           const running = props.useSession(session => session.running);
+          const openState = props.useSession(session => session.openState);
           const removed = props.useSession(session => session.removed);
           const draft = props.useInput(input => input.draft);
           const draftRev = props.useInput(input => input.draftRev);
@@ -186,9 +219,11 @@ window.__ModuleLoader__.load({
           const alive = React.useRef(false);
           const generation = React.useRef(null);
           const statusRequest = React.useRef(null);
+          const automaticGate = React.useRef(null);
+          if (automaticGate.current === null) automaticGate.current = createAutomaticPredictionGate();
           // Whitespace is still a user's draft: only a truly empty editor is eligible.
           const empty = draft === '' && attachmentCount === 0 && phase === 'plain';
-          const idle = running === false && removed === false;
+          const idle = running === false && removed === false && openState === 'open';
           const validRevision = Number.isSafeInteger(revision) && revision >= 0;
           const eligible = idle && empty && ready && validRevision && switches.enabled === true && !switches.pending;
           const latest = React.useRef(null);
@@ -213,8 +248,9 @@ window.__ModuleLoader__.load({
             };
           }, [cancelGeneration]);
           React.useLayoutEffect(() => {
+            automaticGate.current.observe({ revision, ready, running, openState, enabled: switches.enabled });
             if (!eligible || generation.current?.revision !== revision) cancelGeneration();
-          }, [eligible, revision, cancelGeneration]);
+          }, [eligible, revision, ready, running, openState, switches.enabled, cancelGeneration]);
 
           function acceptSetting(payload, epoch) {
             if (settingEpoch === epoch && !settings.pending) {
@@ -268,7 +304,8 @@ window.__ModuleLoader__.load({
             const current = latest.current;
             if (!alive.current || !current.eligible || settings.pending || settings.enabled !== true
               || generation.current) return;
-            if (!refresh && (record.attemptedRevision === current.revision || record.hiddenRevision === current.revision)) return;
+            if (!refresh && (!automaticGate.current.allows(current.revision)
+              || record.attemptedRevision === current.revision || record.hiddenRevision === current.revision)) return;
             const controller = makeController();
             const request = { controller, revision: current.revision, epoch: settingEpoch };
             generation.current = request;
@@ -354,7 +391,8 @@ window.__ModuleLoader__.load({
           // The persistent preference lives on the plugin page.
           if (!idle || !empty || switches.enabled === false || hidden
             || (!generating && !error && suggestions.length === 0)) return null;
-          return h('section', { className: 'dsh-predicted-messages', 'aria-label': t('title') },
+          return h('div', { className: 'dsh-predicted-messages__frame' },
+            h('section', { className: 'dsh-predicted-messages dsh-predicted-messages--dock', 'aria-label': t('title') },
             h('style', null, CSS),
             h('div', { className: 'dsh-predicted-messages__bar' },
               h('span', { className: 'dsh-predicted-messages__title', title: t('description') }, t('title')),
@@ -375,7 +413,7 @@ window.__ModuleLoader__.load({
             status && h('p', {
               className: `dsh-predicted-messages__status${error ? ' dsh-predicted-messages__error' : ''}`,
               role: 'status', 'aria-live': 'polite',
-            }, status));
+            }, status)));
         }
         function PredictionSettings({ t, useRemoteAccess }) {
           const canRead = useRemoteAccess('settings/describe');
@@ -493,7 +531,7 @@ window.__ModuleLoader__.load({
           return props.sessionId ? h(PredictionDock, { ...props, key: props.sessionId }) : null;
         }
         ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
-          name: 'conversation.input.dock', id: 'local-predicted-messages-above', order: 40, locale: NS,
+          name: 'conversation.input.dock', id: 'local-predicted-messages-aligned', order: 40, locale: NS,
         }, Entry));
         // Automatic prediction commands belong in the dock, not generic Chat cards.
         ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register({

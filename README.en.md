@@ -6,7 +6,9 @@ A community plugin for DeepSeek Harness (DSH) that predicts your next message fr
 
 ## Features
 
-- Up to two suggestions after a completed reply, using the current conversation model.
+- Up to two suggestions after a new reply completes in the currently viewed conversation, using its model.
+- Opening or revisiting completed history only reads cached results; it never automatically spends model quota.
+- Suggestions share the composer's width and side clearance.
 - Refresh or hide suggestions for the current round.
 - Cancel stale requests when you type, switch sessions, or disable predictions.
 - A persistent **Show predicted messages** switch under **Plugins → Predicted messages**, with an explicit **Save** action.
@@ -16,6 +18,12 @@ A community plugin for DeepSeek Harness (DSH) that predicts your next message fr
 This independent plugin is not affiliated with OpenAI Codex.
 
 ## Install
+
+**Main-branch fixes:** the historical-conversation trigger and composer alignment fixes are on `main`, not in the v0.1.2 Release yet. To use those fixes, install:
+
+```text
+git+https://github.com/shine1973/dsh-predicted-messages.git#main
+```
 
 Requires DSH with a working model provider. Developed and used with **DSH 0.2.2-rc.1 on macOS Desktop**. Other platforms have not received full UI validation. The declared DSH range is `>=0.2.2-rc.1 <0.3.0`; API changes may require a plugin update.
 
