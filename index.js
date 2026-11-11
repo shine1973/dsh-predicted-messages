@@ -2,17 +2,18 @@
 import { Service } from '@deepseek-ai/cordis';
 import schema from '@deepseek-ai/schemastery';
 import { z } from 'zod';
-import { PredictionRuntime, PROJECTION_KEY, initialState, foldContext, validateInput, TOOL_NAME, TOOL_DESCRIPTION, TOOL_PARAMETERS } from './core.js';
+import { PredictionRuntime, PROJECTION_KEY, initialState, foldContext, validateInput, TOOL_NAME, TOOL_DESCRIPTION, TOOL_PARAMETERS, TURN_END_PROMPT } from './core.js';
 
 const drafts = z.array(z.string().max(320)).max(2);
 const viewSchema = z.object({ revision: z.number(), ready: z.boolean(), suggestions: drafts });
 const stateSchema = z.object({
-  sessionId: z.string(), inheritedEventCount: z.number(), turn: z.number().nullable(),
-  calls: z.array(z.object({ callId: z.string(), step: z.number(), suggestions: drafts })).max(16),
-  pending: drafts, view: viewSchema,
+  sessionId: z.string(), inheritedEventCount: z.number(), systemPromptSeq: z.number().nullable(), turn: z.number().nullable(),
+  calls: z.array(z.object({ callId: z.string(), rootCallId: z.string().optional(), step: z.number(), suggestions: drafts })).max(16),
+  roots: z.array(z.object({ callId: z.string(), step: z.number(), seen: z.array(z.string()).max(64), pending: z.object({ suggestions: drafts, seq: z.number() }).nullable() })).max(16),
+  pendingSeq: z.number(), pending: drafts, view: viewSchema,
 });
 export default class PredictedMessages extends Service {
-  static inject = ['sessions', 'sessionProjections', 'commands', 'tools', 'configEditor'];
+  static inject = ['sessions', 'sessionProjections', 'commands', 'tools', 'configEditor', 'systemPrompt'];
   static Config = schema.object({
     enabled: schema.boolean().default(true).description('Display next-message drafts submitted by the conversation model.'),
     // Accepted for existing profile migrations; no longer used.
@@ -28,7 +29,7 @@ export default class PredictedMessages extends Service {
   async [Service.init]() {
     const ctx = this.ctx;
     const projection = await ctx.sessionProjections.register({
-      key: PROJECTION_KEY, stateVersion: 3, stateSchema,
+      key: PROJECTION_KEY, stateVersion: 5, stateSchema,
       init: initialState, apply: foldContext,
       wire: { viewSchema, view: state => state.view, summary: false },
     });
@@ -40,6 +41,10 @@ export default class PredictedMessages extends Service {
       },
     });
     ctx.effect(() => () => this.runtime.dispose());
+    ctx.effect(() => ctx.systemPrompt.section({
+      name: 'predicted-messages-turn-end', order: 90, interpolate: false,
+      text: () => this.runtime.config.enabled ? TURN_END_PROMPT : '',
+    }));
     ctx.commands.register({
       name: 'predicted-messages', description: '查看下一步草稿或开启/关闭显示。',
       input: { hint: '{"action":"status|configure","enabled":true}' }, recordInput: false,
@@ -61,13 +66,13 @@ export default class PredictedMessages extends Service {
         }, required: ['enabled', 'revision', 'suggestions', 'status', 'model'], additionalProperties: false },
         render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }],
       },
-      execute: async (args, exec) => this.operate(exec.agent, validateInput(args), exec.signal, exec.callId),
+      execute: async (args, exec) => this.operate(exec.agent, validateInput(args), exec.signal, exec.callId, exec.rootCallId),
     });
   }
-  async operate(agent, input, signal, callId) {
+  async operate(agent, input, signal, callId, rootCallId) {
     if (!agent) throw new Error('此操作需要当前会话。');
     const session = this.ctx.sessions.get(agent.id);
     if (!session) throw new Error('会话尚未打开。');
-    return this.runtime.operate(session, input, signal, callId);
+    return this.runtime.operate(session, input, signal, callId, rootCallId);
   }
 }

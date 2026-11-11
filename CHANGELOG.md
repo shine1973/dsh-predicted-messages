@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.8 — 2026-11-11 · 灰字、键盘与 PTC 修复
+
+- 使用官方系统提示段提醒主模型在回复结束前提交一次建议；无建议提交空数组，尊重用户禁用建议和严格输出要求，不添加独立模型请求。
+- 当前主会话空编辑器内显示第一条建议的只读灰字，最多三行；Tab 通过 CAS 填入第一条，Esc 隐藏本轮。保留按钮、IME、焦点、附件、修饰键及实时草稿保护，缺少接口时退回按钮。
+- 支持 `run_code` 一级 PTC 子调用，严格关联成功子回执、成功根调用和 completed 轮次；拒绝未知嵌套父链。
+- 修复正常每步 system-prompt 替换误清空当前轮次的问题；投影 v5 追踪单个系统节点，保留合法刷新前后的提交，其它历史替换仍保守清空。
+- 49 项测试覆盖真实事件形状、真实 Cordis 挂载及组件交互；Node 24/26 通过。交互验收由用户确认通过，灰字截图由用户提供；未声称代理进行了浏览器视觉测试。
+
+### English
+
+- Add an enabled-aware turn-end reminder without a separate model request.
+- Show read-only ghost text, adopt the first suggestion with Tab and dismiss with Esc, preserving CAS, IME, focus, attachment and modifier guards.
+- Support first-level PTC submissions with durable child/root/turn correlation.
+- Fix normal system-prompt refreshes clearing active-turn identity; projection v5 tracks the exact system node while other replacements remain conservative.
+- Pass 49 tests on Node 24/26. Local interaction acceptance and the ghost-text screenshot were supplied by the user, not an agent-run browser visual test.
+
 ## 0.1.7 — 2026-11-10 · 主模型建议与手动生成按钮
 
 - 改由当前会话主模型通过 `predicted_messages submit` 提交最多两条下一步草稿；移除独立预测模型请求和摘要读取。主模型可以不提交建议，工具说明、调用与续写仍消耗 Tokens。

@@ -96,6 +96,9 @@ window.__ModuleLoader__.load({
 .dsh-predicted-messages__setting-copy p{margin:4px 0;font-size:13px;line-height:1.6}
 .dsh-predicted-messages__setting-footer{display:flex;align-items:center;flex-wrap:wrap;gap:12px;margin-top:14px}
 .dsh-predicted-messages__save{padding:6px 16px;border-radius:8px;border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary)!important}
+.dsh-predicted-messages__ghost{display:none;position:absolute;pointer-events:none;user-select:none;white-space:pre-wrap;overflow-wrap:anywhere;overflow:hidden;color:var(--dsw-alias-label-caption);z-index:1}
+.dsh-predicted-messages__ghost[data-visible="true"]{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3}
+[data-composer-card]:has(.dsh-predicted-messages__ghost[data-visible="true"]) [data-composer-placeholder]{visibility:hidden}
 @media(prefers-reduced-motion:reduce){.dsh-predicted-messages__thumb{transition:none}}
 `;
     function parsePayload(remote, t) {
@@ -121,6 +124,57 @@ window.__ModuleLoader__.load({
         status: payload.status,
         suggestions: [...new Set(payload.suggestions.map(text => text.trim()).filter(Boolean))].slice(0, 2),
         model: typeof payload.model === 'string' ? payload.model : undefined,
+      };
+    }
+    // Optional presentation only: no editor mutations, input actions, or requests.
+    function mountGhostPreview(node, { read, subscribe }) {
+      const card = node.closest('[data-composer-card]');
+      const anchor = node.closest('[data-composer-overlay]');
+      const editor = card?.querySelector('[data-composer-input][contenteditable="true"]');
+      const scroll = card?.querySelector('[data-input-scroll]');
+      const win = node.ownerDocument?.defaultView;
+      if (!card || !anchor || !editor || !scroll || !win) return () => {};
+      let composing = false, stopped = false;
+      const hide = () => { node.dataset.visible = 'false'; node.textContent = ''; };
+      const update = () => {
+        if (stopped) return;
+        const text = read();
+        if (!text || composing || editor.hasAttribute('data-composer-composing')
+          || !editor.isConnected || !node.isConnected || editor.getAttribute('contenteditable') !== 'true' || editor.textContent.trim() !== '') { hide(); return; }
+        const box = editor.getBoundingClientRect(), origin = anchor.getBoundingClientRect();
+        const viewport = scroll.getBoundingClientRect(), style = win.getComputedStyle(editor);
+        const px = key => Number.parseFloat(style[key]) || 0;
+        const line = px('lineHeight') || px('fontSize') * 1.5;
+        const left = box.left + px('paddingLeft'), top = box.top + px('paddingTop');
+        const width = box.width - px('paddingLeft') - px('paddingRight');
+        const height = Math.min(line * 3, box.bottom - top - px('paddingBottom'));
+        if (width <= 0 || height <= 0 || top >= viewport.bottom || top + height <= viewport.top) { hide(); return; }
+        Object.assign(node.style, { left: `${left - origin.left}px`, top: `${top - origin.top}px`,
+          width: `${width}px`, maxHeight: `${height}px`, font: style.font, lineHeight: style.lineHeight,
+          letterSpacing: style.letterSpacing, textAlign: style.textAlign, direction: style.direction,
+          clipPath: `inset(${Math.max(0, viewport.top - top)}px 0 ${Math.max(0, top + height - viewport.bottom)}px 0)` });
+        node.textContent = text;
+        node.dataset.visible = 'true';
+      };
+      const onStart = () => { composing = true; hide(); };
+      const onEnd = () => { composing = false; update(); };
+      editor.addEventListener('compositionstart', onStart);
+      editor.addEventListener('compositionend', onEnd);
+      editor.addEventListener('beforeinput', hide);
+      editor.addEventListener('input', update);
+      scroll.addEventListener('scroll', update, { passive: true });
+      win.addEventListener('resize', update);
+      const resize = win.ResizeObserver ? new win.ResizeObserver(update) : null;
+      for (const target of [editor, card, scroll]) resize?.observe(target);
+      const mutation = win.MutationObserver ? new win.MutationObserver(update) : null;
+      mutation?.observe(editor, { attributes: true, attributeFilter: ['data-composer-composing', 'contenteditable'], childList: true, subtree: true, characterData: true });
+      const off = subscribe(update);
+      update();
+      return () => {
+        stopped = true; hide(); off(); resize?.disconnect(); mutation?.disconnect();
+        editor.removeEventListener('compositionstart', onStart); editor.removeEventListener('compositionend', onEnd);
+        editor.removeEventListener('beforeinput', hide); editor.removeEventListener('input', update);
+        scroll.removeEventListener('scroll', update); win.removeEventListener('resize', update);
       };
     }
     function insertDraft(inputActions, draftRev, text) {
@@ -180,6 +234,7 @@ window.__ModuleLoader__.load({
     }
     return {
       insertDraft,
+      mountGhostPreview,
       createSuggestionRequester,
       inject: ['slots', 'sessions', 'locale'],
       apply(ctx) {
@@ -255,6 +310,8 @@ window.__ModuleLoader__.load({
           const eligible = idle && empty && ready && switches.enabled === true && !switches.pending;
           const canGenerate = idle && !subagent && !awaitingFirstTurn && pendingSubmissions === 0
             && switches.enabled === true && !switches.pending && canPrompt && !requesting;
+          const dock = React.useRef(null);
+          const keyboard = React.useRef(null);
           const latest = React.useRef(null);
           latest.current = { revision, eligible, draftRev, canGenerate, canPrompt };
           const alive = React.useRef(false);
@@ -288,27 +345,80 @@ window.__ModuleLoader__.load({
             return () => controller.abort();
           }, [sessionId, revision, openState, switches.pending, switches.enabled]);
           function hide() {
+            if (record.hiddenRevision === revision) return false;
             record.hiddenRevision = revision;
+            for (const listener of listeners) listener();
             setHiddenRevision(revision);
+            return true;
           }
           function insert(text) {
             const current = latest.current;
             if (!current.eligible || settings.enabled !== true || settings.pending
-              || current.revision !== view?.revision || !inputActions) return;
+              || current.revision !== view?.revision || record.hiddenRevision === current.revision || !inputActions) return false;
             // Compare the live editor, then insertText performs the atomic CAS.
             if (!insertDraft(inputActions, current.draftRev, text)) {
               setError(t('error.draftChanged'));
-              return;
+              return false;
             }
             hide();
+            return true;
           }
           const suggestions = eligible && hiddenRevision !== revision && view?.revision === revision
             && view.status === 'ready' ? view.suggestions : [];
+          keyboard.current = { suggestions, insert, hide };
+          React.useEffect(() => {
+            const preview = { revision, text: suggestions[0] ?? '' };
+            record.preview = preview;
+            for (const listener of listeners) listener();
+            return () => {
+              if (record.preview === preview) {
+                record.preview = null;
+                for (const listener of listeners) listener();
+              }
+            };
+          }, [revision, suggestions[0]]);
+          React.useEffect(() => {
+            // Cordis inject objects are service maps, not required/optional lists.
+            // Optional keyboard services must never prevent the buttons from mounting.
+            const shortcuts = ctx.get('shortcuts');
+            if (!shortcuts?.observeFixedInput) return;
+            const off = shortcuts.observeFixedInput(input => {
+              if (!alive.current || input.type !== 'keydown') return;
+              const { gesture: g, context: c } = input;
+              if (!g || !c || g.defaultPrevented || g.composing || g.repeat
+                || g.control || g.alt || g.shift || g.meta || c.modal !== null || c.region !== 'editable'
+                || !['Tab', 'Escape'].includes(g.code)) return;
+              // Verified shell markers are a narrow fallback for its nonpublic focus handle.
+              const seat = dock.current?.closest('[data-composer-seat]');
+              const editor = c.target?.closest('[data-composer-input][contenteditable="true"]');
+              if (!seat || !editor || !seat.isConnected || !editor.isConnected
+                || editor.closest('[data-composer-seat]') !== seat
+                || seat.closest('[data-conversation-session]')?.getAttribute('data-conversation-session') !== sessionId
+                || editor.ownerDocument.activeElement !== editor || editor.hasAttribute('data-composer-composing')) return;
+              // Read the official main-view source again: attachments need not change draftRev.
+              const main = ctx.get('uiSession')?.adapter?.current?.getSnapshot();
+              if (main?.key !== sessionId || main.props?.inputActions !== inputActions) return;
+              const liveInput = main.hooks?.input?.getSnapshot();
+              const session = ctx.sessions.binding(sessionId)?.session;
+              const liveSession = session?.getSnapshot();
+              const liveView = session?.projections?.faceOf(PROJECTION)?.getSnapshot();
+              const current = latest.current;
+              const action = keyboard.current;
+              if (!liveInput || liveInput.draft !== '' || !Array.isArray(liveInput.attachmentIds) || liveInput.attachmentIds.length !== 0
+                || liveInput.phase !== 'plain' || liveInput.draftRev !== current.draftRev
+                || !liveSession || liveSession.running !== false || liveSession.removed !== false || liveSession.openState !== 'open'
+                || liveView?.revision !== current.revision || liveView.ready !== true
+                || !current.eligible || settings.enabled !== true || settings.pending
+                || record.hiddenRevision === current.revision || !action.suggestions.length) return;
+              if (g.code === 'Tab' ? action.insert(action.suggestions[0]) : action.hide()) input.consume();
+            });
+            return off;
+          }, [sessionId, inputActions]);
           const notice = switches.enabled === false ? 'request.disabled'
             : subagent || !canPrompt ? 'request.unavailable'
             : requesting || running || awaitingFirstTurn || pendingSubmissions ? 'request.waiting'
             : view?.status === 'empty' ? 'request.empty' : 'request.hint';
-          return h('div', { className: 'dsh-predicted-messages__frame' },
+          return h('div', { ref: dock, className: 'dsh-predicted-messages__frame' },
             h('section', { className: 'dsh-predicted-messages dsh-predicted-messages--dock', 'aria-label': t('title') },
               h('style', null, CSS),
               h('div', { className: 'dsh-predicted-messages__bar' },
@@ -324,6 +434,45 @@ window.__ModuleLoader__.load({
                   'aria-label': t('insert', { text }), onClick: () => insert(text),
                 }, text))),
               error && h('p', { role: 'status', className: 'dsh-predicted-messages__error' }, error)));
+        }
+        function GhostPreview({ sessionId, inputActions }) {
+          const ghost = React.useRef(null);
+          React.useEffect(() => {
+            const main = ctx.get('uiSession')?.adapter?.current;
+            if (!main || !ghost.current) return;
+            const read = () => {
+              const active = main.getSnapshot();
+              if (active?.key !== sessionId || active.props?.inputActions !== inputActions
+                || ghost.current.closest('[data-conversation-session]')?.getAttribute('data-conversation-session') !== sessionId
+                || settings.enabled !== true || settings.pending) return '';
+              const input = active.hooks?.input?.getSnapshot();
+              const session = ctx.sessions.binding(sessionId)?.session;
+              const state = session?.getSnapshot();
+              const view = session?.projections?.faceOf(PROJECTION)?.getSnapshot();
+              if (!input || input.draft !== '' || !Array.isArray(input.attachmentIds) || input.attachmentIds.length
+                || input.phase !== 'plain' || state?.running !== false || state.removed !== false || state.openState !== 'open'
+                || view?.ready !== true || recordFor(sessionId).hiddenRevision === view.revision) return '';
+              const preview = recordFor(sessionId).preview;
+              return preview?.revision === view.revision && preview.text === view.suggestions?.[0] ? preview.text : '';
+            };
+            return mountGhostPreview(ghost.current, { read, subscribe(update) {
+              let sourceOff = [];
+              const bind = () => {
+                for (const off of sourceOff) off();
+                const active = main.getSnapshot();
+                const session = ctx.sessions.binding(sessionId)?.session;
+                const sources = [active?.key === sessionId ? active.hooks?.input : null, session, session?.projections?.faceOf(PROJECTION)];
+                sourceOff = sources.filter(source => source?.subscribe).map(source => source.subscribe(update));
+                update();
+              };
+              const offMain = main.subscribe(bind), offSettings = subscribe(update);
+              bind();
+              return () => { offMain(); offSettings(); for (const off of sourceOff) off(); };
+            } });
+          }, [sessionId, inputActions]);
+          return h('div', null, h('style', null, CSS), h('div', {
+            ref: ghost, className: 'dsh-predicted-messages__ghost', 'data-visible': 'false', 'aria-hidden': true,
+          }));
         }
         function PredictionSettings({ t, useRemoteAccess }) {
           const canRead = useRemoteAccess('settings/describe');
@@ -443,6 +592,9 @@ window.__ModuleLoader__.load({
         ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({
           name: 'conversation.input.dock', id: 'local-predicted-messages-aligned', order: 40, locale: NS,
         }, Entry));
+        ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
+          name: 'conversation.input.overlay', id: 'predicted-messages-ghost', order: 40,
+        }, props => props.sessionId ? h(GhostPreview, { ...props, key: props.sessionId }) : null));
         // Read-only status commands belong in the dock, not generic Chat cards.
         ctx.slots.inject('conversation.chat.commandview', () => ctx.slots.register({
           name: 'conversation.chat.commandview', key: 'predicted-messages',
